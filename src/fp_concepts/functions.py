@@ -10,16 +10,13 @@ from collections.abc import Callable
 from functools       import partial, update_wrapper, wraps
 from inspect         import signature, Parameter
 
-from .Applicative    import Applicative
-
 __all__ = [
     'identity', 'const',
     'pair', 'fst', 'snd', 'with_fst', 'with_snd',
     'triple', 'quadruple',
     'compose', 'flip', 'fn_eval', 'eval_on',
     'curry', 'uncurry', 'partial2',
-    'Function', 'EffectfulFunction',
-    'TypedFunction',  # Provisional
+    'Function',
 ]
 
 
@@ -37,7 +34,8 @@ def count_pos_parameters(f, *, include_defaults=False):
     return n
 
 def do_curry(fn, n):
-    def curried(x, *xs, **kw):
+    # ATTN: why are _xs and _kw here?? To catch uncurried args? Should they be dropped?
+    def curried(x, *_xs, **_kw):
         if n > 1:
             return do_curry(partial(fn, x), n - 1)
         return partial(fn, x)
@@ -292,33 +290,3 @@ class Function:
         if isinstance(other, Function):
             return self.__class__(compose(self._fn, other._fn))
         return self.__class__(compose(self._fn, other))
-
-class EffectfulFunction(Function):
-    "Class representing a function that produces an Applicative Functor."
-
-    def __init__(self, f, ap: Applicative):
-        self._applicative = ap
-        super().__init__(f)
-
-    @property
-    def effect(self):
-        return self._applicative
-
-def get_effect(f) -> type | None:
-    "If f is an effectful function returns its Applicative, else None"
-    if hasattr(f, 'effect'):
-        return f.effect
-    return None
-
-# ATTN: Provisional, might be useful with using()
-# This is a potential alternative to having a use= argument
-# or it can supplement that.
-class TypedFunction(Function):
-    "Class representing a function with associated types in its signature."
-
-    def __init__(self, f, **types):
-        self._types = dict(types)
-        super().__init__(f)
-
-    def has(self, associated_type):
-        return self._types.get(associated_type, None)

@@ -10,7 +10,8 @@ from typing          import Protocol
 
 from .Applicative import Applicative, IdentityA
 from .Functor     import Functor
-from .functions   import identity, get_effect
+from .functions   import identity
+from .wrappers    import get_effect
 
 __all__ = ['Traversable', 'traverse', 'sequence', 'IndexedTraversable', 'itraverse',]
 

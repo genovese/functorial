@@ -15,7 +15,7 @@ from .List        import List
 from .Traversable import traverse, itraverse
 
 __all__ = ['BinaryTree', 'Tip', 'is_binary_tree', 'binary_tree', 'complete_btree',
-           'RoseTree',]
+           'RoseTree', 'SExp',]
 
 
 #
@@ -179,23 +179,28 @@ def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type in
     "Tests if object is a Binary Tree."
     return isinstance(t, AbstractBinaryTree)
 
-def binary_tree(spec=None, left=Tip, right=Tip, seed=None):
+def binary_tree(spec=None, left=Tip, right=Tip, seed=None, sexp=None):
     """Smart binary tree constructor.
 
     Accepts a variety of argument configurations:
 
     + binary_tree() -- gives the empty BinaryTree
     + binary_tree(bt) -- for bt : BinaryTree, returns bt as is
+    + binary_tree(sexp=[...]) -- builds tree from an S-expression
     + binary_tree(SExp([...])) -- builds tree from an S-expression
     + binary_tree(f, seed=x) -- unfolds tree with f and starting seed x
     + binary_tree(data, left, right) -- returns BinaryTree data left right.
 
-    SExp() is needed as a wrapper on an S-expression list specifying
-    the tree to distinguish from trees with tuple or list data
-    types.
+    A tree can be specified from an S-expression using either the
+    sexp= keyword (alone) or by wrapping the S-expression for the
+    tree in SExp(). This extra work is needed to distinguish from
+    trees with tuple or list data types. Note that
+    BinaryTree.to_sexp returns a SExp object and so can be used
+    directly. Also note that BinaryTree accepts an sexp without
+    wrapper.
 
     """
-    if not spec:
+    if not spec and not sexp:
         return EmptyBinaryTree()
 
     if is_binary_tree(spec):
@@ -203,6 +208,9 @@ def binary_tree(spec=None, left=Tip, right=Tip, seed=None):
 
     if callable(spec):
         BinaryTree.unfold(spec, seed)
+
+    if not spec and sexp:
+        return BinaryTree(sexp)
 
     if isinstance(spec, SExp):
         return BinaryTree(spec)

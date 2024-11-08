@@ -335,8 +335,8 @@ class MonoidalDictM(Monoid):
 def cartesian(monoids):
     "Returns a Monoid wrapper class for a cartesian product of other monoids."
     monoids = tuple(monoids)
-    unit = tuple(lambda m: m.munit, monoids)
-    product_label = f'cartesian({", ".join(lambda x: x.label, monoids)})'
+    unit = tuple(m.munit for m in monoids)
+    product_label = f'cartesian({", ".join(x.label for x in monoids)})'
 
     class MTuple(Monoid):
         "A cartesian product of monoids"

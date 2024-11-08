@@ -12,7 +12,8 @@ from collections.abc import Callable
 
 from .Applicative    import Applicative, IdentityA
 from .Bifunctor      import Bifunctor
-from .functions      import identity, get_effect
+from .functions      import identity
+from .wrappers       import get_effect
 
 __all__ = ['Bitraversable', 'bitraverse', 'bisequence']
 

@@ -10,7 +10,8 @@ from .Monoids     import Monoid
 from .Identity    import Identity
 from .List        import List
 from .Maybe       import Maybe, maybe
-from .functions   import compose, EffectfulFunction
+from .functions   import compose
+from .wrappers    import EffectfulFunction
 
 __all__ = [
     'Free', 'Collect', 'CollectMaybe', 'eff',

@@ -14,7 +14,7 @@ from .Bifunctor   import Bifunctor
 from .Functor     import map
 from .Traversable import Traversable
 
-__all__ = ['Pair', 'fork', 'duplex']
+__all__ = ['Pair', 'pair', 'fork', 'duplex']
 
 
 class Pair[A, B](tuple, Bifunctor, Traversable):
@@ -57,6 +57,11 @@ class Pair[A, B](tuple, Bifunctor, Traversable):
 #
 # Pair-based function combinators
 #
+
+def pair(x, y):
+    "Forms a pair. A curriable, drop-in replacement for functions.pair."
+    return Pair(x, y)
+
 
 def fork(f, g):
     "Returns a function that maps x :-> (f(x), g(x))."

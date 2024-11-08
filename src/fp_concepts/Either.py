@@ -6,16 +6,16 @@
 # ruff: noqa: N802, E731
 #
 
-from __future__     import annotations
+from __future__      import annotations
 
-from abc            import abstractmethod
-from colletions.abc import Callable
-from typing         import TypeGuard
+from abc             import abstractmethod
+from collections.abc import Callable
+from typing          import TypeGuard
 
-from .Applicative   import Applicative
-from .Bifunctor     import Bifunctor
-from .Monad         import Monad
-from .Traversable   import Traversable
+from .Applicative    import Applicative
+from .Bifunctor      import Bifunctor
+from .Monad          import Monad
+from .Traversable    import Traversable
 
 
 __all__ = ['Either', 'Left', 'Right', 'isLeft', 'isRight', 'either',]
