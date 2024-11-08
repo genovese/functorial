@@ -179,7 +179,7 @@ def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type in
     "Tests if object is a Binary Tree."
     return isinstance(t, AbstractBinaryTree)
 
-def binary_tree(spec=None, left=Tip, right=Tip, seed=None, sexp=None):
+def binary_tree(spec=None, left=Tip, right=Tip, *, seed=None, sexp=None):
     """Smart binary tree constructor.
 
     Accepts a variety of argument configurations:

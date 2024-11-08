@@ -28,9 +28,11 @@ from .Pair        import *
 
 from .Dict        import *
 from .Monoids     import Monoid, munit, mcombine
+from .Reader      import *
 from .Set         import *
 from .State       import *
 from .Trees       import *
+from .Writer      import *
 
 from .functions   import *
 from .optics      import *

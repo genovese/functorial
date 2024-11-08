@@ -25,10 +25,16 @@ class Monad(Applicative):
 
     @abstractmethod
     def bind(self, g: Callable):
+        "Sequences monadic effects.  m a -> (a -> m b) -> m b"
         ...
 
     def join(self):
+        "Unwraps one layer of monadic effects. m (m a) -> m a"
         return self.bind(identity)
+
+    def then(self, mb: Monad):
+        "Runs two monadic effects, retaining the second. ma -> mb -> mb"
+        return self.bind(lambda _: mb)
 
     @classmethod
     def __do__(cls, make_generator):
