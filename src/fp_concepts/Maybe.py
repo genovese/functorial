@@ -22,6 +22,7 @@ from abc             import abstractmethod
 from collections.abc import Callable
 from typing          import TypeGuard
 
+from .Alternative import Alternative
 from .Applicative import Applicative
 from .Functor     import map
 from .Monad       import Monad
@@ -44,6 +45,15 @@ class Maybe[A](Monad, Traversable):
 
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
         ...
+
+    @property
+    def empty(self):
+        return None_()
+
+    def alt(self, fb: Maybe[A]) -> Maybe[A]:
+        if not self:
+            return fb
+        return self
 
     def bind[B](self, f: Callable[[A], Maybe[B]]) -> Maybe[B]:
         ...

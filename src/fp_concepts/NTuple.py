@@ -33,9 +33,6 @@ class NTuple[A](tuple, Applicative, Traversable):
     def __new__(cls, *args, **kwds):
         return super().__new__(cls, *args, **kwds)
 
-    def __repr__(self):
-        return super().__repr__()
-
     def __getitem__(self, key):
         items = super().__getitem__(key)
         if isinstance(key, slice):

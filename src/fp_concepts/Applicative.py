@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from abc             import abstractmethod
 from collections.abc import Callable
+from typing          import Protocol
 
 from .Functor        import Functor
 from .functions      import curry, pair, fn_eval
@@ -21,7 +22,7 @@ __all__ = ['Applicative', 'map2', 'combine', 'pure', 'ap', 'IdentityA', ]
 # Applicative as a mixin
 #
 
-class Applicative(Functor):
+class Applicative(Functor, Protocol):
     @classmethod
     def pure(cls, a):
         raise NotImplementedError

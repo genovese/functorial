@@ -11,29 +11,39 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from .Alternative import Alternative
 from .Applicative import Applicative, map2
 from .Functor     import pymap
 from .Monad       import Monad
 from .Monoids     import Monoid
 from .Traversable import Traversable
 
-__all__ = ['List', 'NonEmptyList', 'ZipList', 'cons', 'snoc', 'snoc_']
+__all__ = ['List', 'NonEmptyList', 'ZipList',
+           'zip_with', 'zip_longest',
+           'cons', 'snoc', 'snoc_', 'append_']
 
 
 #
 # The List Functor
+# ----------------
 #
-# type List a = Nil | Cons a (List a)
+# While the motivating type is
 #
-# This is a Functor, Applicative, and Monad
+#     type List a = Nil | Cons a (List a)
+#
+# it is simply implemented as a subclass of the
+# built-in Python list.
+#
+# This is has an instance for many of the basic traits,
+# including Functor, Applicative, Alternative, Monad,
+# Foldable, and Traversable.
 #
 
 class List[A](list, Monad, Traversable):
     def __new__(cls, *args, **kwds):
         return super().__new__(cls, *args, **kwds)
 
-    def __repr__(self):
-        return super().__repr__()
+    # Ensure List type conserved on slicing, concatenation, copy
 
     def __getitem__(self, key):
         items = super().__getitem__(key)
@@ -49,15 +59,32 @@ class List[A](list, Monad, Traversable):
         concat = super().__radd__(other)
         return List(concat)
 
+    def copy(self):
+        return self.__class__(super().copy())
+
+    # Analogue of built-in list construction
+    # Example: List.of(1, 2, 3, 4)
+
     @classmethod
     def of(cls, *xs: tuple[Iterable[A], ...]):
+        """Returns a new List with the given arguments as elements.
+
+        Examples:
+          + List.of(1, 2, 3, 4)
+          + List.of(Some(4), None_(), Some(10))
+
+        """
         return cls(xs)
+
+    # Functor and IndexedFunctor Instances
 
     def map[A, B](self, g: Callable[[A], B]):
         return self.__class__(pymap(g, self))
 
     def imap[I, A, B](self, g: Callable[[I, A], B]):
         return self.__class__(g(i, elt) for i, elt in enumerate(self))
+
+    # Applicative Instance
 
     @classmethod
     def pure(cls, a):
@@ -69,6 +96,17 @@ class List[A](list, Monad, Traversable):
             for b in fb:
                 concat.append(g(a, b))
         return self.__class__(concat)
+
+    # Alternative Instance
+
+    @property
+    def empty(self):
+        return self.__class__([])
+
+    def alt(self, fb):
+        return self.__class__([*self, *fb])
+
+    # Monad Instance
 
     def bind[B](self, g: Callable[[A], List[B]]) -> List[B]:
         concat = []
@@ -124,6 +162,8 @@ class List[A](list, Monad, Traversable):
             if len(positions) == 0:
                 return List(joined)
 
+    # Foldable and IndexedFoldable Instances
+
     def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         r = monoid.munit
         for elt in self:
@@ -150,6 +190,8 @@ class List[A](list, Monad, Traversable):
             acc = f(index, acc, elt)
         return acc
 
+    # Traversable and IndexedTraversable Instances
+
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         traversed = f.pure(List())
         for item in self:
@@ -166,6 +208,29 @@ class List[A](list, Monad, Traversable):
 #
 # List Utilities
 #
+
+def zip_with[B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B]) -> List[C]:
+    """ATTN
+
+    The returned collection has type List even if the arguments are subclasses.
+    See also ZipList.
+
+    """
+    return List(pymap(g, fa, fb))
+
+def zip_longest[B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B], default: C) -> List[C]:
+    """ATTN
+
+    The returned collection has type List even if the arguments are subclasses.
+    See also ZipList.
+
+    """
+    m = len(fa)
+    n = len(fb)
+    extra = max(m, n) - min(m, n)
+    zipped = list(pymap(g, fa, fb))
+    padded = [default] * extra
+    return List([*zipped, *padded])
 
 def cons[A](x: A, ls: List[A]) -> List[A]:
     "Prepends an element on the front of a list and returns it. O(n) in Python."
@@ -200,6 +265,8 @@ class NonEmptyList(List):
             raise ValueError('NonEmptyList cannot be empty')
         super().__init__(xs)
 
+    # Maintain non-empty invariant on removal operations
+
     def __delitem__(self, key):
         if isinstance(key, slice):
             start, stop, step = key.indices(len(self))
@@ -226,9 +293,6 @@ class NonEmptyList(List):
             raise ValueError(f'pop({index}) would delete the only element of a NonEmptyList')
         return super().pop(index)
 
-    def copy(self):
-        return self.__class__(super().copy())
-
 
 #
 # ZipList
@@ -248,6 +312,12 @@ class NonEmptyList(List):
 class ZipList[A](List):
     def map2[B, C](self, g: Callable[[A, B], C], fb: ZipList[B]) -> ZipList[C]:
         return self.__class__(pymap(g, self, fb))
+
+    def __repr__(self):
+        base = super().__repr__()
+        return f'ZipList({base})'
+
+    # There is no Monad Instance
 
     def bind[B](self, _g: Callable[[A], ZipList[B]]) -> ZipList[B]:
         raise TypeError('ZipList does not have a Monad instance')
