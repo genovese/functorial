@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable
 
 from .Applicative import Applicative, map2
 from .Functor     import pymap
-from .List        import List, snoc_
+from .List        import List, append_
 from .Traversable import Traversable
 
 __all__ = ['NTuple',]
@@ -60,7 +60,7 @@ class NTuple[A](tuple, Applicative, Traversable):
         return NTuple(concat)
 
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
-        folded = f.pure(List())
+        traversed = f.pure(List())
         for item in self:
-            folded = map2(snoc_, g(item), folded)
-        return folded.map(NTuple)
+            traversed = map2(append_, traversed, g(item))
+        return traversed.map(NTuple)
