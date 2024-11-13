@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from abc             import abstractmethod
 from collections.abc import Callable
-from typing          import Protocol
+from typing          import Protocol, runtime_checkable
 
 from .Functor        import Functor
 from .functions      import curry, pair, fn_eval
@@ -22,6 +22,7 @@ __all__ = ['Applicative', 'map2', 'combine', 'pure', 'ap', 'IdentityA', ]
 # Applicative as a mixin
 #
 
+@runtime_checkable
 class Applicative(Functor, Protocol):
     @classmethod
     def pure(cls, a):
@@ -32,7 +33,6 @@ class Applicative(Functor, Protocol):
         ...
 
     @classmethod
-    @property
     def unit(cls):
         return cls.pure( () )
 
@@ -61,7 +61,7 @@ def ap(fa_to_b: Applicative | Callable, fa: Applicative, *fs: Applicative, auto_
     # elif auto_curry:
     #     fa_to_b = fa_to_b.map(curry)  # ATTN: PROVISIONAL
 
-    fb = fa_to_b.ap(fa)
+    fb = fa_to_b.ap(fa)      # type: ignore
     for fx in fs:
         fb = fb.ap(fx)
     return fb
@@ -75,12 +75,11 @@ def lift2[A, B, C](f: Callable[[A, B], C]):
 
     """
     def liftA2(fa: Applicative, fb: Applicative) -> Applicative:
-        if not issubclass(fa, fb) and not issubclass(fb, fa):
+        if not issubclass(fa.__class__, fb.__class__) and not issubclass(fb.__class__, fa.__class__):
             raise TypeError('lift2(f) should be applied to compatible applicatives.')
         return fa.map2(f, fb)
 
     return liftA2
-
 
 
 # A copy of the Identity Functor that is only an Applicative

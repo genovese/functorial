@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from . import Monoids
 
+from .Alternative import *
 from .Applicative import *
 from .Bifunctor   import *
 from .CoFunctor   import *

@@ -20,7 +20,7 @@ from .Traversable import Traversable
 __all__ = ['NTuple',]
 
 
-class NTuple[A](tuple, Applicative, Traversable):
+class NTupleBase[A](tuple, Applicative, Traversable):
     """Tuples with components of a common type as Applicative Traversables.
 
     Here, NTuple a is isomorphic to [1..n] -> a for some n.
@@ -30,13 +30,22 @@ class NTuple[A](tuple, Applicative, Traversable):
     These are, however, implemented as wrapped Python tuples.
 
     """
+    _size = 1
+
     def __new__(cls, *args, **kwds):
-        return super().__new__(cls, *args, **kwds)
+        if len(args) == 0:
+            mesg = f'Ntuple({cls._size}) requires {cls._size} elements.'
+            raise TypeError(mesg)
+        input = list(args[0])  # Allow iterators/generators/iterables as input
+        if len(input) != cls._size:
+            mesg = f'Ntuple({cls._size}) initialized with {len(input)} != {cls._size} elements.'
+            raise TypeError(mesg)
+        return super().__new__(cls, input, *args[1:], **kwds)
 
     def __getitem__(self, key):
         items = super().__getitem__(key)
         if isinstance(key, slice):
-            return NTuple(items)
+            return self.__class__(items)
         return items
 
     @classmethod
@@ -44,23 +53,40 @@ class NTuple[A](tuple, Applicative, Traversable):
         return cls(xs)
 
     def map[B](self, g: Callable[[A], B]):
-        return NTuple(pymap(g, self))
+        return self.__class__(pymap(g, self))
 
     @classmethod
     def pure(cls, a):
-        return cls([a])
+        return cls([a] * cls._size)
 
-    def map2[B, C](self, g: Callable[[A, B], C], fb: NTuple[B]) -> NTuple[C]:
+    def map2[B, C](self, g: Callable[[A, B], C], fb: NTupleBase[B]) -> NTupleBase[C]:
         if len(self) != len(fb):
             raise TypeError(f'map2 requires NTuples of the same length: {len(self)} != {len(fb)}')
 
         concat = []
         for i, a in enumerate(self):
             concat.append(g(a, fb[i]))
-        return NTuple(concat)
+        return self.__class__(concat)
 
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         traversed = f.pure(List())
         for item in self:
             traversed = map2(append_, traversed, g(item))
-        return traversed.map(NTuple)
+        return traversed.map(self.__class__)
+
+ntuple_registry = {}
+
+def NTuple(n: int, *args):
+    if n <= 0:
+        raise TypeError('NTuple requires a positive length')
+    if n in ntuple_registry:
+        cls = ntuple_registry[n]
+    else:
+        class NTuple_n(NTupleBase):
+            _size = n
+        ntuple_registry[n] = NTuple_n
+        cls = NTuple_n
+
+    if len(args) == 0:
+        return cls
+    return cls(args[0])

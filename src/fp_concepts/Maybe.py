@@ -82,10 +82,10 @@ class Some[A](Maybe[A]):
         self._value = value
 
     def __str__(self):
-        return f'Some {self._value}'
+        return f'Some {str(self._value)}'
 
     def __repr__(self):
-        return f'Some({self._value})'
+        return f'Some({repr(self._value)})'
 
     def __eq__(self, other):
         if isinstance(other, Some):

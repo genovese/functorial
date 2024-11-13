@@ -63,7 +63,7 @@ class Either[A, B](Monad, Bifunctor, Traversable):
                     return x
                 x = x.bind(f)
         except StopIteration as finished:
-            return Right(finished.value)
+            return cls.pure(finished.value)
 
     def __eq__(self, other):
         ...
