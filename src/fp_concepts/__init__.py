@@ -1,6 +1,6 @@
 __all__ = [
     'Applicative',
-    'Bicovariant',
+    'Bicofunctor',
     'Bifunctor',
     'Bitraversable',
     'CoFunctor',

@@ -49,7 +49,7 @@ def Const(x, monoid: Monoid | None = None):
         # combined Const's have the same monoid.
 
         class ConstM[A, B](Applicative, Traversable):
-            _monoid = monoid
+            _monoid: Monoid = monoid   # type: ignore
 
             def __init__(self):
                 self._value = x
@@ -103,7 +103,7 @@ def Const(x, monoid: Monoid | None = None):
         def monoid(self):
             return None
 
-        def map[C](self, _g: Callable[[B], C]) -> Const_[A, C]:
+        def map[C](self, _g: Callable[[B], C]) -> Const_[A, C]:   # type: ignore
             return cast(Const_[A, C], self)
 
         def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b

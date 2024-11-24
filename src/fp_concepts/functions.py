@@ -6,14 +6,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing          import TypeGuard
+
+from collections.abc import Callable, Iterable, Sequence
 from functools       import partial, update_wrapper, wraps
 from inspect         import signature, Parameter
 
 __all__ = [
     'identity', 'const',
     'pair', 'fst', 'snd', 'with_fst', 'with_snd',
-    'triple', 'quadruple',
+    'triple', 'quadruple', 'swap',
+    'is_iterable', 'is_sequence',
     'compose', 'flip', 'fn_eval', 'eval_on',
     'curry', 'uncurry', 'partial2',
     'Function',
@@ -29,7 +32,7 @@ def count_pos_parameters(f, *, include_defaults=False):
     n = 0
     for p in signature(f).parameters.values():
         if (p.kind in {Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD}
-            and (include_defaults or p.default == Parameter.empty)):
+           and (include_defaults or p.default == Parameter.empty)):
             n += 1
     return n
 
@@ -46,7 +49,7 @@ def compose2(after: Callable, before: Callable) -> Callable:
     def composed(*x):
         return after(before(*x))
 
-    return update_wrapper(composed, before, assigned=('__module__', '__annotations__','__type_params__'))
+    return update_wrapper(composed, before, assigned=('__module__', '__annotations__', '__type_params__'))
 
 
 #
@@ -64,13 +67,16 @@ def const(x):
     return f
 
 def pair(x, y):
+    "Returns a pair whose components are the arguments."
     return (x, y)
 
 def fst(x_y):
+    "Returns the first component of a tuple."
     x, _y, *_ = x_y
     return x
 
 def snd(x_y):
+    "Returns the second component of a tuple."
     _x, y, *_ = x_y
     return y
 
@@ -83,10 +89,21 @@ def with_snd(y):
     return lambda x: (x, y)
 
 def triple(x, y, z):
+    "Returns a 3-tuple whose components are the arguments."
     return (x, y, z)
 
 def quadruple(w, x, y, z):
+    "Returns a 4-tuple whose components are the arguments."
     return (w, x, y, z)
+
+def swap(xs):
+    """Swaps the first two elements of a sequence, returning an object of the same class.
+
+    Works for classes (e.g., tuples and lists) whose constructor takes only an
+    interable of the contents.
+
+    """
+    return xs.__class__([xs[1], xs[0], *xs[2:]])
 
 
 #
@@ -106,19 +123,21 @@ def compose(*fs: Callable) -> Callable:
 
     if len(fs) == 3:
         h, g, f = fs
+
         def composed3(*x):
             return h(g(f(*x)))
 
         return update_wrapper(composed3, f,
-                              assigned=('__module__', '__annotations__','__type_params__'))
+                              assigned=('__module__', '__annotations__', '__type_params__'))
 
     if len(fs) == 4:
         k, h, g, f = fs
+
         def composed4(*x):
             return k(h(g(f(*x))))
 
         return update_wrapper(composed4, f,
-                              assigned=('__module__', '__annotations__','__type_params__'))
+                              assigned=('__module__', '__annotations__', '__type_params__'))
 
     f = compose2(fs[-2], fs[-1])
     for g in fs[-3::-1]:
@@ -201,6 +220,23 @@ def eval_on[A, B](a: A) -> Callable[[Callable[[A], B]], B]:
 
 
 #
+# Common checks made easy
+#
+
+def is_iterable(x) -> TypeGuard[Iterable]:
+    """Tests for an Iterable collection that is not a primitive (str or bytes).
+
+    """
+    return isinstance(x, Iterable) and not (isinstance(x, str) or isinstance(x, bytes))
+
+def is_sequence(x) -> TypeGuard[Sequence]:
+    """Tests for an Iterable collection that is not a primitive (str or bytes).
+
+    """
+    return isinstance(x, Sequence) and not (isinstance(x, str) or isinstance(x, bytes))
+
+
+#
 # A Function Wrapper Class to support nice operations
 #
 # Examples include:
@@ -251,6 +287,9 @@ class Function:
 
     def partial2(self, y) -> Function:
         return self.__class__(partial2(self._fn, y))
+
+    def dimap(self, f, g):  # Profunctor instance via Protocol
+        return self.__class__(compose(f, self._fn, g))
 
     def __rrshift__(self, other):
         "Pipeline evaluation: value >> f ==> f(value)"

@@ -29,14 +29,14 @@ pymap = map  # Reference to built-in map
 # Functor as a mixin
 #
 
-class Functor(Protocol):
+class Functor[A](Protocol):
     @abstractmethod
-    def map[A, B](self, g: Callable[[A], B]):
+    def map[B](self, g: Callable[[A], B]):
         ...
 
-class IndexedFunctor[I](Functor, Protocol):
+class IndexedFunctor[I, A](Functor, Protocol):
     @abstractmethod
-    def imap[A, B](self, g: Callable[[I, A], B]):
+    def imap[B](self, g: Callable[[I, A], B]):
         ...
 
 

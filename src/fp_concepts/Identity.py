@@ -23,7 +23,7 @@ __all__ = ['Identity',]
 
 
 class Identity[A](Monad, Traversable):
-    __match_args__ = ('value',)
+    __match_args__ = ('_value',)
 
     def __init__(self, x: A):
         self._value = x

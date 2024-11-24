@@ -1,7 +1,7 @@
 #
-# Cartesian (aka Strong) is the trait
+# Strong (aka Cartesian) is the trait
 #
-# trait Profunctor p => Cartesian p where
+# trait Profunctor p => Strong p where
 #     to_first  : p a b -> p (a, c) (b, c)
 #     to_second : p a b -> p (c, a) (c, b)
 #
@@ -12,16 +12,13 @@ from __future__   import annotations
 
 from typing       import Callable, cast
 
-from ..Profunctor import Profunctor, dimap
-from ..functions  import compose, identity
+from ..Profunctor import Profunctor
+from ..functions  import swap
 
-__all__ = ['Cartesian', 'into_first', 'into_second', 'lens']
-
-def swap(v):
-    return (v[1], v[0])
+__all__ = ['Strong', 'into_first', 'into_second', 'lens']
 
 
-class Cartesian[A, B](Profunctor):
+class Strong[A, B](Profunctor):
     """Profunctors with ``strength''
 
     Specifically, we can annotate the components of the profunctor
@@ -31,35 +28,35 @@ class Cartesian[A, B](Profunctor):
 
     This trait is also known as Strong in many treatments.
 
-    trait Profunctor p => Cartesian p where
+    trait Profunctor p => Strong p where
         into_first  : p a b -> p (a, c) (b, c)
         into_second : p a b -> p (c, a) (c, b)
 
     One of into_first or into_second must be defined for a valid instance.
 
     """
-    def into_first[C](self) -> Cartesian[tuple[A, C], tuple[B, C]]:
+    def into_first[C](self) -> Strong[tuple[A, C], tuple[B, C]]:
         p = self.into_second().dimap(swap, swap)
-        return cast(Cartesian[tuple[A, C], tuple[B, C]], p)
+        return cast(Strong[tuple[A, C], tuple[B, C]], p)
 
-    def into_second[C](self) -> Cartesian[tuple[C, A], tuple[C, B]]:
+    def into_second[C](self) -> Strong[tuple[C, A], tuple[C, B]]:
         p = self.into_first().dimap(swap, swap)
-        return cast(Cartesian[tuple[C, A], tuple[C, B]], p)
+        return cast(Strong[tuple[C, A], tuple[C, B]], p)
 
-def into_first[A, B, C](p_ab: Cartesian[A, B]) -> Cartesian[tuple[A, C], tuple[B, C]]:
+def into_first[A, B, C](p_ab: Strong[A, B]) -> Strong[tuple[A, C], tuple[B, C]]:
     return p_ab.into_first()
 
-def into_second[A, B, C](p_ab: Cartesian[A, B]) -> Cartesian[tuple[C, A], tuple[C, B]]:
+def into_second[A, B, C](p_ab: Strong[A, B]) -> Strong[tuple[C, A], tuple[C, B]]:
     return p_ab.into_second()
 
 def lens[A, B, S, T](
         getter: Callable[[S], A],
         setter: Callable[[S, B], T]
-) -> Callable[[Cartesian[A, B]], Cartesian[S, T]]:
-    def the_lens(p_ab: Cartesian[A, B]) -> Cartesian[S, T]:
-        p_ac_bc: Cartesian[tuple[A, S], tuple[B, S]] = p_ab.into_first()
+) -> Callable[[Strong[A, B]], Strong[S, T]]:
+    def the_lens(p_ab: Strong[A, B]) -> Strong[S, T]:
+        p_ac_bc: Strong[tuple[A, S], tuple[B, S]] = p_ab.into_first()
         p = p_ac_bc.dimap(lambda s: (getter(s), s),
                           lambda b_s: setter(*b_s))
-        return cast(Cartesian[S, T], p)
+        return cast(Strong[S, T], p)
 
     return the_lens

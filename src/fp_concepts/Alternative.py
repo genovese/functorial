@@ -17,8 +17,8 @@ __all__ = ['Alternative', 'alt']
 #
 
 class Alternative[A](Applicative, Protocol):
-    @property
-    def empty(self) -> Alternative[A]:
+    @classmethod
+    def empty(cls) -> Alternative[A]:
         raise NotImplementedError
 
     @abstractmethod

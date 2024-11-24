@@ -11,6 +11,7 @@ from . import Monoids
 
 from .Alternative import *
 from .Applicative import *
+from .Bicofunctor import *
 from .Bifunctor   import *
 from .CoFunctor   import *
 from .Foldable    import *

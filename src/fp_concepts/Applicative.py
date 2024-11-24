@@ -95,7 +95,7 @@ class IdentityA[A](Applicative):
     not use this explicitly.
 
     """
-    __match_args__ = ('value',)
+    __match_args__ = ('_value',)
 
     def __init__(self, x: A):
         self._value = x

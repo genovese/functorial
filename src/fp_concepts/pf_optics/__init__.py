@@ -1,4 +1,5 @@
 __all__ = [
-    'Cartesian',
+    'Strong',
+    'Costrong',
     'Forget',
 ]
