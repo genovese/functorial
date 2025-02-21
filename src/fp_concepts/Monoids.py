@@ -24,18 +24,20 @@ import math
 
 from typing     import Protocol, runtime_checkable
 
+from .functions import compose, identity
+
 __all__ = [
     # Classes and Generic Functions
     'Semigroup', 'Monoid', 'munit', 'mcombine', 'make_monoid',
 
     # Concrete Monoids
     'Trivial', 'Free',
-    'First', 'Last', 'Min', 'Max', 'Sum', 'Product',
+    'First', 'Last', 'Min', 'Max', 'Sum', 'Product', 'Count',
     'Conjunction', 'Disjunction',
-    'Union', 'UnionM', 'MonoidalDictM',
+    'Union', 'Intersect', 'Endo', 'MonoidalDictM',
 
     # Monoid combinators
-    'cartesian', 'mtuple',
+    'cartesian', 'mtuple', 'dual',
 ]
 
 #
@@ -52,12 +54,14 @@ __all__ = [
 #
 
 class Semigroup(Protocol):
-    def mcombine(self, x, y): ...
+    def mcombine(self, x, y):
+        ...
 
 @runtime_checkable
 class Monoid(Semigroup, Protocol):
     @property
-    def munit(self): ...
+    def munit(self):
+        ...
 
     @property
     def label(self):
@@ -69,6 +73,9 @@ class Monoid(Semigroup, Protocol):
     def __repr__(self):
         return f'{self.__class__.__name__}()'
 
+    def conforms(self, x) -> bool:
+        return True
+
 def munit(m):
     "The identity/unit element of a given monoid."
     return m.munit
@@ -77,7 +84,7 @@ def mcombine(m, x, y):
     "The combine operation for a given monoid and two monoidal values."
     return m.mcombine(x, y)
 
-def make_monoid(unit, combine, name='Custom'):
+def make_monoid(unit, combine, name='Custom', is_valid=lambda x: True):
     "Creates a monoid object from a unit and associative operation."
     class CustomM(Monoid):
         @property
@@ -90,6 +97,9 @@ def make_monoid(unit, combine, name='Custom'):
 
         def mcombine(self, x, y):
             return combine(x, y)
+
+        def conforms(self, x) -> bool:
+            return is_valid(x)
 
     return CustomM()
 
@@ -210,9 +220,45 @@ class SumM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float)
+        return isinstance(x, int) or isinstance(x, float) or isinstance(x, complex)
 
 Sum = SumM()
+
+class CountM(Monoid):
+    "A monoid that counts the values it sees."
+
+    class A_Count(int):
+        def __init__(self, x):
+            self._value = x
+
+        def __repr__(self):
+            return repr(self._value)
+
+        @classmethod
+        def make(cls, x):
+            if isinstance(x, cls):
+                return x
+            return cls(1)
+
+        def __add__(self, other):
+            if isinstance(other, self.__class__):
+                delta = other._value
+            else:
+                delta = 1
+            return self.__class__(self._value + delta)
+
+    def mcombine(self, x, y):
+        return self.A_Count.make(x) + self.A_Count.make(y)
+
+    @property
+    def munit(self):
+        return self.A_Count(0)
+
+    def conforms(self, x) -> bool:
+        "Any value can be counted and is converted internally."
+        return True
+
+Count = CountM()
 
 class ConjunctionM(Monoid):
     "Boolean with `and` as the monoid operator."
@@ -223,6 +269,9 @@ class ConjunctionM(Monoid):
 
     def mcombine(self, a, b):
         return a and b
+
+    def conforms(self, x) -> bool:  # ATTN: Could allow any values here
+        return isinstance(x, bool)
 
 Conjunction = ConjunctionM()
 
@@ -235,6 +284,9 @@ class DisjunctionM(Monoid):
 
     def mcombine(self, a, b):
         return a or b
+
+    def conforms(self, x) -> bool:  # ATTN: Could allow any values here
+        return isinstance(x, bool)
 
 Disjunction = DisjunctionM()
 
@@ -250,13 +302,14 @@ class ProductM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float)
+        return isinstance(x, int) or isinstance(x, float) or isinstance(x, complex)
 
 Product = ProductM()
 
 class UnionM(Monoid):
-    def __init__(self, base_cls=set):
-        self._base = base_cls
+    "A Monoid representing sets under the union operation."
+    def __init__(self, base_cls: type = set):
+        self._base: type = base_cls
 
     @property
     def munit(self):
@@ -265,7 +318,58 @@ class UnionM(Monoid):
     def mcombine(self, a, b):
         return self._base(a.union(b))
 
+    def conforms(self, x) -> bool:
+        return isinstance(x, self._base)
+
 Union = UnionM()
+
+class Intersect(Monoid):
+    "A Monoid representing sets under intersection within a specified universe."
+    def __init__(self, universe: set):
+        self._universe = universe
+
+    @property
+    def munit(self):
+        return self._universe
+
+    def mcombine(self, a, b):
+        cls = self._universe.__class__
+        return cls(a.intersection(b))
+
+    def conforms(self, x) -> bool:
+        return isinstance(x, self._universe.__class__) and x <= self._universe
+
+class EndoM(Monoid):
+    """Monoids representing functions a -> a under composition.
+
+    Note that in general, we cannot check the types when using
+    this, so instead of taking the domain-codomain type a,
+    with a separate class per type, we simply represent this
+    idea with a single monoid. The user must check that the
+    types make sense.
+
+    """
+    @property
+    def munit(self):
+        return identity
+
+    def mcombine(self, a, b):
+        return compose(a, b)
+
+    def conforms(self, x) -> bool:
+        # We cannot guarantee that the types are valid
+        return callable(x)  # and x : a -> a
+
+    def __call__(self, a: type):
+        # Allows self documenting code, e.g., Endo(int) if desired.
+        return self
+
+    @classmethod
+    def run(cls, f, x):
+        return f(x)
+
+Endo = EndoM()
+
 
 class MonoidalDictM(Monoid):
     "A monoid that merges arbitrary monoidal dictionaries."
@@ -354,10 +458,34 @@ def cartesian(monoids):
 
         def conforms(self, x) -> bool:
             "A tuple of the same length and conforming to monoids in template is required"
-            return isinstance(x, tuple) and len(x) == len(monoids) and all(m.conforms(x) for m in monoids)
+            return (isinstance(x, tuple) and len(x) == len(monoids)
+                    and all(monoids[k].conforms(x[k]) for k in range(len(x))))
 
     return MTuple()
 
 def mtuple(*monoids):
     "Like cartesian, but the component monoids are given as separate arguments."
     return cartesian(monoids)
+
+def dual(monoid):
+    "Returns a Monoid that is dual to the given monoid."
+
+    class MDual(Monoid):
+        "The dual of a specified monoid."
+
+        def mcombine(self, x, y):
+            return monoid.mcombine(y, x)
+
+        @property
+        def munit(self):
+            return monoid.munit
+
+        @property
+        def label(self):
+            return f'dual({str(monoid)})'
+
+        def conforms(self, x) -> bool:
+            "A dual accepts the same values as the original monoid."
+            return monoid.conforms(x)
+
+    return MDual()

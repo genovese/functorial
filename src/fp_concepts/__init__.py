@@ -25,6 +25,5 @@ __all__ = [
     'functions',
     'ops',
     'optics',
-    'pf_optics',
     'utils',
 ]

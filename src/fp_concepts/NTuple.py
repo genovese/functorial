@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing          import cast
 
 from .Applicative import Applicative, map2
 from .Functor     import pymap
@@ -66,7 +67,7 @@ class NTupleBase[A](tuple, Applicative, Traversable):
         concat = []
         for i, a in enumerate(self):
             concat.append(g(a, fb[i]))
-        return self.__class__(concat)
+        return cast(NTupleBase[C], self.__class__(concat))
 
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         traversed = f.pure(List())
@@ -74,7 +75,7 @@ class NTupleBase[A](tuple, Applicative, Traversable):
             traversed = map2(append_, traversed, g(item))
         return traversed.map(self.__class__)
 
-ntuple_registry = {}
+ntuple_registry: dict[int, type[NTupleBase]] = {}
 
 def NTuple(n: int, *args):
     if n <= 0:

@@ -249,7 +249,7 @@ class Function:
     """A class that wraps functions to support pipe and composition operators.
 
     Calls are simply delegated to the function. The original function can
-    be obtained, if needed, from the .raw property.
+    be obtained, if needed, from the .run property.
 
     Example use cases include:
       - building pipelines
@@ -261,7 +261,7 @@ class Function:
     def __init__(self, f):
         self._fn = f
 
-        # Mimic properties of the raw function object
+        # Mimic properties of the underlying function
         self.__doc__ = getattr(f, '__doc__', '')
         self.__name__ = getattr(f, '__name__', 'anonymous')
         self.__qualname__ = getattr(f, '__qualname__', self.__name__)
@@ -278,8 +278,16 @@ class Function:
     def __call__(self, *args, **kwds):
         return self._fn(*args, **kwds)
 
+    @classmethod
+    def as_function(cls, f):
+        if isinstance(f, Function):
+            return f
+        if callable(f):
+            return cls(f)
+        raise TypeError('as_function can only convert a callable to a Function.')
+
     @property
-    def raw(self):  # Controlled access when needed
+    def run(self):  # Controlled access when needed
         return self._fn
 
     def partial(self, x) -> Function:
@@ -287,9 +295,6 @@ class Function:
 
     def partial2(self, y) -> Function:
         return self.__class__(partial2(self._fn, y))
-
-    def dimap(self, f, g):  # Profunctor instance via Protocol
-        return self.__class__(compose(f, self._fn, g))
 
     def __rrshift__(self, other):
         "Pipeline evaluation: value >> f ==> f(value)"
@@ -329,3 +334,39 @@ class Function:
         if isinstance(other, Function):
             return self.__class__(compose(self._fn, other._fn))
         return self.__class__(compose(self._fn, other))
+
+    def __rmatmul__(self, other):
+        "Function composition: self then other"
+        if not callable(other):
+            return NotImplemented
+
+        if isinstance(other, Function):
+            return self.__class__(compose(other._fn, self._fn))
+        return self.__class__(compose(other, self._fn))
+
+    #
+    # Profunctor Methods. See optics/* for formal instances.
+    #
+    # These are treated as protocol methods here without formally
+    # declaring a subclass relationship, as this is the more
+    # basic type.
+    #
+
+    # Profunctor
+
+    def dimap(self, f, g):  # Profunctor instance via Protocol
+        return self.__class__(compose(g, self._fn, f))
+
+    # Strong
+
+    def into_first(self):
+        def annotated(a_c):
+            a, c = a_c
+            return (self._fn(a), c)
+        return self.__class__(annotated)
+
+    def into_second(self):
+        def annotated(c_a):
+            c, a = c_a
+            return (c, self._fn(a))
+        return self.__class__(annotated)

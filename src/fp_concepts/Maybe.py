@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-from abc             import abstractmethod
+from abc             import ABC, abstractmethod
 from collections.abc import Callable
-from typing          import TypeGuard
+from typing          import TypeGuard, cast
 
 from .Alternative import Alternative
 from .Applicative import Applicative
@@ -28,14 +28,15 @@ from .Functor     import map
 from .Monad       import Monad
 from .Traversable import Traversable
 
-__all__ = ['Maybe', 'None_', 'Some', 'maybe', 'isNone', 'isSome',]
+__all__ = ['Maybe', 'None_', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
 
 
-class Maybe[A](Monad, Traversable):
+class Maybe[A](Monad, Traversable, Alternative, ABC):
     @abstractmethod
     def get(self, default: A) -> A:
         ...
 
+    @abstractmethod
     def map[B](self, g: Callable[[A], B]) -> Maybe[B]:
         ...
 
@@ -43,6 +44,7 @@ class Maybe[A](Monad, Traversable):
     def pure(cls, a: A) -> Maybe[A]:
         return Some(a)
 
+    @abstractmethod
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
         ...
 
@@ -50,11 +52,12 @@ class Maybe[A](Monad, Traversable):
     def empty(self):
         return None_()
 
-    def alt(self, fb: Maybe[A]) -> Maybe[A]:
+    def alt(self, fb: Maybe[A]) -> Maybe[A]:   # type: ignore
         if not self:
             return fb
         return self
 
+    @abstractmethod
     def bind[B](self, f: Callable[[A], Maybe[B]]) -> Maybe[B]:
         ...
 
@@ -72,6 +75,7 @@ class Maybe[A](Monad, Traversable):
         except StopIteration as finished:
             return Some(finished.value)
 
+    @abstractmethod
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         ...
 
@@ -107,7 +111,7 @@ class Some[A](Maybe[A]):
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
         if isinstance(fb, None_):
             return fb
-        return Some(g(self._value, fb._value))
+        return Some(g(self._value, fb._value))  # type: ignore
 
     def bind[B](self, f: Callable[[A], Maybe[B]]) -> Maybe[B]:
         return f(self._value)
@@ -137,13 +141,13 @@ class None_[A](Maybe[A]):   # The name None is already taken
         return default
 
     def map[B](self, _g: Callable[[A], B]) -> Maybe[B]:
-        return self
+        return cast(None_[B], self)
 
     def map2[B, C](self, _g: Callable[[A, B], C], _fb: Maybe[B]) -> Maybe[C]:
-        return self
+        return cast(None_[C], self)
 
     def bind[B](self, _f: Callable[[A], Maybe[B]]) -> Maybe[B]:
-        return self
+        return cast(None_[B], self)
 
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         return f.pure(self)
@@ -171,4 +175,13 @@ def maybe[A, B](default: B, f: Callable[[A], B], m: Maybe[A]) -> B:
         case Some(b):
             return f(b)
         case _:
-            return None  # Only applies if wrong type passed in
+            raise TypeError('maybe applied to a non-Maybe type')
+
+def maybe_[A, B](default: B, f: Callable[[A], B]) -> Callable[[Maybe[A]], B]:
+    """Partial application of maybe on two arguments; returns the function m :--> maybe(f, g, m).
+
+    This partial is a common use case for maybe, so this is provided as a convenience.
+    The _ in the name is supposed to evoke the hole in the last argument.
+
+    """
+    return lambda m: maybe(default, f, m)

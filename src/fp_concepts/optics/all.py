@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+from .Choice    import *
 from .Costrong  import *
 from .Forget    import *
 from .Getter    import *
+from .Optic     import *
+from .Review    import *
 from .Strong    import *

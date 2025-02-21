@@ -2,8 +2,8 @@
 # Strong (aka Cartesian) is the trait
 #
 # trait Profunctor p => Strong p where
-#     to_first  : p a b -> p (a, c) (b, c)
-#     to_second : p a b -> p (c, a) (c, b)
+#     into_first  : p a b -> p (a, c) (b, c)
+#     into_second : p a b -> p (c, a) (c, b)
 #
 # One of to_first or to_second must be defined for an instance.
 #
@@ -13,9 +13,9 @@ from __future__   import annotations
 from typing       import Callable, cast
 
 from ..Profunctor import Profunctor
-from ..functions  import swap
+from ..functions  import Function, const, swap
 
-__all__ = ['Strong', 'into_first', 'into_second', 'lens']
+__all__ = ['Strong', 'into_first', 'into_second', 'lens', 'over', 'put']
 
 
 class Strong[A, B](Profunctor):
@@ -26,7 +26,7 @@ class Strong[A, B](Profunctor):
     into_first and into_second inject that annotation as either the
     first or second element of the pair.
 
-    This trait is also known as Strong in many treatments.
+    This trait is also known as Cartesian in some treatments.
 
     trait Profunctor p => Strong p where
         into_first  : p a b -> p (a, c) (b, c)
@@ -56,7 +56,15 @@ def lens[A, B, S, T](
     def the_lens(p_ab: Strong[A, B]) -> Strong[S, T]:
         p_ac_bc: Strong[tuple[A, S], tuple[B, S]] = p_ab.into_first()
         p = p_ac_bc.dimap(lambda s: (getter(s), s),
-                          lambda b_s: setter(*b_s))
+                          lambda b_s: setter(b_s[1], b_s[0]))
         return cast(Strong[S, T], p)
 
     return the_lens
+
+# ATTN: Move these elsewhere  Setter.py
+
+def over(opt, a_to_b):
+    return opt(Function(a_to_b))
+
+def put(opt, val):
+    return over(opt, const(val))

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from . import Monoids
+from . import optics
 
 from .Alternative import *
 from .Applicative import *
@@ -37,12 +38,13 @@ from .Trees       import *
 from .Writer      import *
 
 from .functions   import *
-from .optics      import *
 from .ops         import *
 from .utils       import *
 from .wrappers    import *
 
 from .Pair        import pair  # More powerful version over .functions.pair
+
+from .optics.all  import *
 
 #
 # Conveniences

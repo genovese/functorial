@@ -14,8 +14,29 @@ from .functions   import compose
 from .wrappers    import EffectfulFunction
 
 __all__ = [
-    'Free', 'Collect', 'CollectMaybe', 'eff',
+    'MissingMonoid', 'Free', 'Collect', 'CollectMaybe', 'eff',
 ]
+
+
+#
+# Monoid Placeholder that alerts when useda
+#
+
+class MissingMonoid(Monoid):
+    "No monoid supplied, only causes a problem if it is used."
+
+    def __init__(self, mesg):
+        self._mesg = mesg
+
+    @property
+    def munit(self):
+        raise TypeError(f'A monoid is required here but not supplied: {self._mesg}.')
+
+    def mcombine(self, _x, _y):
+        raise TypeError(f'A monoid is required here but not supplied: {self._mesg}.')
+
+    def conforms(self, x) -> bool:
+        return False
 
 
 #

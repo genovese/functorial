@@ -65,6 +65,14 @@ def traverse( g: Callable, t: Traversable, effect: type[Applicative] = IdentityA
     """
     return t.traverse(get_effect(g) or effect, g)
 
+def traverse_( g: Callable, effect: type[Applicative] = IdentityA) -> Callable[[Traversable], Applicative]:
+    """Partial evaluation of traverse without the traversable. Returns a function that does the traversal.
+
+    The _ in a name is intended to evoke a hole to be filled in with the traversable.
+
+    """
+    return lambda t: traverse(g, t, effect)
+
 def sequence(t: Traversable, effect: type[Applicative] = IdentityA) -> Applicative:
     """Evaluate effects on each element of a structure, collecting the results in the effectful context.
 
@@ -94,3 +102,11 @@ def itraverse( g: Callable, t: IndexedTraversable, effect: type[Applicative] = I
 
     """
     return t.itraverse(get_effect(g) or effect, g)
+
+def itraverse_( g: Callable, effect: type[Applicative] = IdentityA) -> Callable[[IndexedTraversable], Applicative]:
+    """Partial evaluation of itraverse without the traversable. Returns a function that does the traversal.
+
+    The _ in a name is intended to evoke a hole to be filled in with the traversable.
+
+    """
+    return lambda t: itraverse(g, t, effect)

@@ -26,8 +26,6 @@ class Costrong[A, B](Profunctor):
     methods unfirst and unsecond project away that annotation as
     either the first or second element of the pair.
 
-    This trait is also known as Cocartesian in some treatments.
-
     trait Profunctor p => Costrong p where
         unfirst  : p (a, c) (b, c) -> p a b
         unsecond : p (c, a) (c, b) -> p a b

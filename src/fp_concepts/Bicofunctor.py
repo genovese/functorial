@@ -13,13 +13,14 @@
 from __future__      import annotations
 
 from collections.abc import Callable
+from typing          import Protocol
 
 from .functions      import identity
 
 __all__ = ['Bicofunctor', 'bicomap', 'cofirst', 'cosecond']
 
 
-class Bicofunctor[A, C]:
+class Bicofunctor[A, C](Protocol):
     # Subclasses MUST override at least ONE of these methods
     def bicomap[B, D](self, f: Callable[[B], A], g: Callable[[C], D]) -> Bicofunctor[B, D]:
         x = self.cosecond(g)

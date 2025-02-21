@@ -19,7 +19,7 @@ from .Monad          import Monad
 from .Traversable    import Traversable
 
 
-__all__ = ['Either', 'Left', 'Right', 'isLeft', 'isRight', 'either',]
+__all__ = ['Either', 'Left', 'Right', 'isLeft', 'isRight', 'either', 'either_', ]
 
 
 class Either[A, B](Monad, Bifunctor, Traversable):
@@ -150,3 +150,12 @@ def either[A, B, C](f: Callable[[A], C], g: Callable[[B], C], m: Either[A, B]) -
             return g(b)
         case _:   # Only applies if wrong type passed in
             return None   # type: ignore
+
+def either_[A, B, C](f: Callable[[A], C], g: Callable[[B], C]) -> Callable[[Either[A, B]], C]:
+    """Partial application of either on two arguments; returns the function m :--> either(f, g, m).
+
+    This partial is a common use case for either, so this is provided as a convenience.
+    The _ in the name is supposed to evoke the hole in the last argument.
+
+    """
+    return lambda m: either(f, g, m)

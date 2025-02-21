@@ -59,8 +59,8 @@ class BinaryTree[A](AbstractBinaryTree):
 
         val, left, right, *_ = sexp
         self._value = val
-        self._left = BinaryTree(List(left)) if left else Tip
-        self._right = BinaryTree(List(right)) if right else Tip
+        self._left: BinaryTree[A] | Tip_ = BinaryTree(List(left)) if left else Tip
+        self._right: BinaryTree[A] | Tip_ = BinaryTree(List(right)) if right else Tip
 
     @classmethod
     def make(cls, data: A, left: BinaryTree[A], right: BinaryTree[A]) -> BinaryTree[A]:
@@ -114,7 +114,7 @@ class BinaryTree[A](AbstractBinaryTree):
         return self.as_str().strip()
 
     @classmethod
-    def unfold[A, B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
+    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
         "Creates a binary tree by repeatedly unfolding a generating function from a starting seed."
         def unfold_sexp(s):
             if s is None or s is Tip:
@@ -125,11 +125,11 @@ class BinaryTree[A](AbstractBinaryTree):
 
         return BinaryTree(unfold_sexp(seed))
 
-    def map[B](self, g: Callable[[A], B]):
+    def map[B](self, g: Callable[[A], B]) -> BinaryTree[B]:
         "Maps a function over this binary tree, returning a new tree."
-        tree = BinaryTree([g(self._value), Tip, Tip])
-        tree._left = map(g, self._left) if self._left else Tip
-        tree._right = map(g, self._right) if self._right else Tip
+        tree: BinaryTree[B] = BinaryTree([g(self._value), Tip, Tip])
+        tree._left = map(g, self._left) if self._left else Tip        # type: ignore  # _left: BinaryTree[A] if not Tip
+        tree._right = map(g, self._right) if self._right else Tip     # type: ignore  # _right: BinaryTree[A] if not Tip
         return tree
 
     def imap[I, B](self, g: Callable[[I, A], B]):
@@ -157,7 +157,7 @@ class BinaryTree[A](AbstractBinaryTree):
 class EmptyBinaryTree[A](AbstractBinaryTree):
     "A look-alike representing an empty Binary Tree, for any value type."
     @classmethod
-    def unfold[A, B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
+    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
         return BinaryTree.unfold(gen, seed)
 
     def to_sexp(self):
@@ -169,7 +169,7 @@ class EmptyBinaryTree[A](AbstractBinaryTree):
     def as_str(self, _levels=None):
         return str(self)
 
-    def map[A, B](self, _g: Callable[[A], B]):
+    def map[B](self, _g: Callable[[A], B]):
         return self
 
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
@@ -245,7 +245,7 @@ class RoseTree[A](Applicative):
 
         val, *children = sexp
         self._value = val
-        self._children = List(RoseTree(child) for child in children)
+        self._children: List = List(RoseTree(child) for child in children)  # Note: mypy forces hint
 
     def to_sexp(self):
         """Converts a rose tree to s-expression format.
@@ -289,7 +289,7 @@ class RoseTree[A](Applicative):
         return t
 
     @classmethod
-    def unfold[A, B](cls, gen: Callable[[B], tuple[A, list[B]]], seed: B) -> RoseTree[A]:
+    def unfold[B](cls, gen: Callable[[B], tuple[A, list[B]]], seed: B) -> RoseTree[A]:
         "Creates a rose tree by repeatedly unfolding a generating function from a starting seed."
         def unfold_sexp(s):
             a, seeds = gen(s)
@@ -313,7 +313,7 @@ class RoseTree[A](Applicative):
 
     def map[B](self, g: Callable[[A], B]):
         "Functor instance that maps a function over this rose tree."
-        tree = RoseTree([g(self._value)])
+        tree: RoseTree = RoseTree([g(self._value)])  # Note: mypy forces annotation here??
         tree._children = List(map(g, child) for child in self._children)
         return tree
 
@@ -330,7 +330,7 @@ class RoseTree[A](Applicative):
         return RoseTree([a])
 
     def map2[B, C](self, f: Callable[[A, B], C], tb: RoseTree[B]) -> RoseTree[C]:
-        new_tree = RoseTree([f(self._value, tb._value)])
+        new_tree: RoseTree = RoseTree([f(self._value, tb._value)])
 
         g = lambda sub_b: map(partial(f, self._value), sub_b)
         h = lambda sub_a: map2(f, sub_a, tb)
