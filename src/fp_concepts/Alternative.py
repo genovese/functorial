@@ -9,7 +9,7 @@ from typing       import Protocol
 
 from .Applicative import Applicative
 
-__all__ = ['Alternative', 'alt']
+__all__ = ['Alternative', 'alt', 'guard']
 
 
 #
@@ -27,3 +27,8 @@ class Alternative[A](Applicative, Protocol):
 
 def alt[A](fa: Alternative[A], fb: Alternative[A]) -> Alternative[A]:
     return fa.alt(fb)
+
+def guard(f: type[Alternative], condition: bool) -> Alternative[tuple[()]]:  # ATTN: type Unit = tuple[()]
+    return f.unit() if condition else f.empty()
+
+# ATTN: Include some and many?  Can we implement them?

@@ -25,7 +25,7 @@ from ..Profunctor  import Profunctor, dilift  # , lmap
 from ..functions   import Function, identity
 
 from .Cochoice     import Cochoice
-from .Forget       import Forget
+from .profunctors  import Forget
 
 __all__ = ['view', 'view_with', 'getter']
 

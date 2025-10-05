@@ -8,9 +8,9 @@
 #
 # To run the tests, enter
 #
-#   python -m pytest -v fpc_examps.py 
+#   python -m pytest -v fpc_examps.py
 #
-# python 3.12 is expected here because
+# python 3.12+ is expected here because
 # of the typing syntax.
 #
 # You should put all the files
@@ -426,14 +426,23 @@ def test_traversable():
 
 #
 # Optics
-#    
+#
 
 def optics_examples():
+    def eq(ma, mb):
+        return len(ma) == len(mb) and all(a == b for a, b in zip(ma, mb))
+
     return [
-        (collect(at(1))(List.of(1, 2, 3, 4)), 2, None),
+        # This is still just vl optics
+        (collect(at(1))(List.of(1, 2, 3, 4)), [2], eq),
         (view(at(1))(List.of(1, 2, 3, 4)), 2, None),
-        (view(fourth)((1, 2, 3, 4, 5)), 4, None),
-        (view(c(second, first, fourth))([1, [[1, 2, 3, 4, 5], 6, 7]]), 4, None),
+        (view(at(0))(List.of(1, 2, 3, 4)), 1, None),
+        (view(at(-1))(List.of(1, 2, 3, 4)), 4, None),
+        (List.of(0, 1, 2, 3, 4, 5) >> put(at(slice(3, None)), [20, 30, 40]), [0, 1, 2, 20, 30, 40], eq),
+        (List.of(0, 1, 2, 3, 4, 5) >> put(at(0, slice(3, None)), [10, 20, 30, 40]), [10, 1, 2, 20, 30, 40], eq),
+        (List.of(0, 1, 2, 3, 4, 5) >> put(at(0, slice(3, None)), [10, 20, 30]), [10, 1, 2, 20, 30, 5], eq),
+        (view(t_3)((1, 2, 3, 4, 5)), 4, None),
+        (view(t_1 @ t_0 @ t_3)([1, [[1, 2, 3, 4, 5], 6, 7]]), 4, None),
     ]
 
 def test_optics():

@@ -6,10 +6,17 @@
 
 from __future__ import annotations
 
-from .Choice    import *
-from .Costrong  import *
-from .Forget    import *
-from .Getter    import *
-from .Optic     import *
-from .Review    import *
-from .Strong    import *
+from .AffineFold  import *
+from .Choice      import *
+from .Cochoice    import *
+from .Costrong    import *
+from .Fold        import *
+from .Getter      import *
+from .Lens        import *
+from .Optic       import *
+from .Prism       import *
+from .Review      import *
+from .Setter      import *
+from .Strong      import *
+from .generics    import *
+from .profunctors import *

@@ -27,6 +27,7 @@ from .Applicative import Applicative
 from .Functor     import map
 from .Monad       import Monad
 from .Traversable import Traversable
+from .Unit        import Unit
 
 __all__ = ['Maybe', 'None_', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
 
@@ -119,7 +120,9 @@ class Some[A](Maybe[A]):
     def traverse(self, _f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         return map(Some, g(self._value))
 
-    def itraverse[I](self, _f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:  # g : () -> a -> f b
+    # def itraverse[I](self, _f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:
+    def itraverse(self, _f: type[Applicative], g: Callable[[Unit, A], Applicative]) -> Applicative:
+        # g : () -> a -> f b
         return map(Some, g((), self._value))
 
 class None_[A](Maybe[A]):   # The name None is already taken
@@ -149,10 +152,12 @@ class None_[A](Maybe[A]):   # The name None is already taken
     def bind[B](self, _f: Callable[[A], Maybe[B]]) -> Maybe[B]:
         return cast(None_[B], self)
 
-    def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+    def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:
+        # g : a -> f b
         return f.pure(self)
 
-    def itraverse[I](self, f: type[Applicative], _g: Callable[[I, A], Applicative]) -> Applicative:  # g : () -> a -> f b
+    def itraverse[I](self, f: type[Applicative], _g: Callable[[I, A], Applicative]) -> Applicative:
+        # g : () -> a -> f b
         return f.pure(self)
 
 def isNone[A](x: Maybe[A]) -> TypeGuard[None_]:

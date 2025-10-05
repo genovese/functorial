@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing          import TypeGuard
+from typing          import Self, TypeGuard
 
 from collections.abc import Callable, Iterable, Sequence
 from functools       import partial, update_wrapper, wraps
@@ -227,13 +227,13 @@ def is_iterable(x) -> TypeGuard[Iterable]:
     """Tests for an Iterable collection that is not a primitive (str or bytes).
 
     """
-    return isinstance(x, Iterable) and not (isinstance(x, str) or isinstance(x, bytes))
+    return isinstance(x, Iterable) and not isinstance(x, (str, bytes))
 
 def is_sequence(x) -> TypeGuard[Sequence]:
     """Tests for an Iterable collection that is not a primitive (str or bytes).
 
     """
-    return isinstance(x, Sequence) and not (isinstance(x, str) or isinstance(x, bytes))
+    return isinstance(x, Sequence) and not isinstance(x, (str, bytes))
 
 
 #
@@ -244,6 +244,9 @@ def is_sequence(x) -> TypeGuard[Sequence]:
 #  - composing optics
 #  - predicate objects
 #
+
+# To make this an actual profunctor, put Function in its own module
+# from .Profunctor     import Profunctor
 
 class Function:
     """A class that wraps functions to support pipe and composition operators.
@@ -272,6 +275,8 @@ class Function:
         self.__type_params__ = getattr(f, '__type_params__', None)
         self.__dict__ = getattr(f, '__dict__', {}) | self.__dict__
 
+        super().__init__()
+
     def __str__(self):
         return f'Function {self.__name__}'
 
@@ -290,10 +295,10 @@ class Function:
     def run(self):  # Controlled access when needed
         return self._fn
 
-    def partial(self, x) -> Function:
+    def partial(self, x) -> Self:
         return self.__class__(partial(self._fn, x))
 
-    def partial2(self, y) -> Function:
+    def partial2(self, y) -> Self:
         return self.__class__(partial2(self._fn, y))
 
     def __rrshift__(self, other):
@@ -352,12 +357,18 @@ class Function:
     # basic type.
     #
 
-    # Profunctor
+    # Profunctor instance via Protocol
 
-    def dimap(self, f, g):  # Profunctor instance via Protocol
+    def dimap(self, f, g) -> Self:
         return self.__class__(compose(g, self._fn, f))
 
-    # Strong
+    def lmap(self, f) -> Self:
+        return self.__class__(compose(self._fn, f))
+
+    def rmap(self, g) -> Self:
+        return self.__class__(compose(g, self._fn))
+
+    # Strong instance via Protocol
 
     def into_first(self):
         def annotated(a_c):

@@ -10,13 +10,14 @@
 
 from __future__   import annotations
 
+from abc          import abstractmethod
 from typing       import Callable, Protocol, cast
 
 from ..Either     import Either, Left, Right, either
 from ..Profunctor import Profunctor
 from ..functions  import identity
 
-__all__ = ['Choice', 'into_left', 'into_right', 'prism', 'left', 'right']
+__all__ = ['Choice', 'into_left', 'into_right']
 
 
 def swap[S, T](x: Either[S, T]) -> Either[T, S]:
@@ -39,12 +40,17 @@ class Choice[A, B](Profunctor, Protocol):
     One of into_left or into_right must be defined for a valid instance.
 
     """
+    # ATTN: Make this a Protocol only?
+    @abstractmethod
+    def dimap[C, D](self, f: Callable[[C], A], g: Callable[[B], D]) -> Choice[C, D]:
+        ...
+
     def into_left[C](self) -> Choice[Either[A, C], Either[B, C]]:
-        p = self.into_right().dimap(swap, swap)
+        p = self.into_right().dimap(swap, swap)                       # type: ignore
         return cast(Choice[Either[A, C], Either[B, C]], p)
 
     def into_right[C](self) -> Choice[Either[C, A], Either[C, B]]:
-        p = self.into_left().dimap(swap, swap)
+        p = self.into_left().dimap(swap, swap)                       # type: ignore
         return cast(Choice[Either[C, A], Either[C, B]], p)
 
 def into_left[A, B, C](p_ab: Choice[A, B]) -> Choice[Either[A, C], Either[B, C]]:
@@ -57,9 +63,10 @@ def prism[A, B, S, T](
         construct: Callable[[B], T],
         match: Callable[[S], Either[T, A]]
 ) -> Callable[[Choice[A, B]], Choice[S, T]]:
+    # (s -> Either s a) (Either s b -> t)
     def the_prism(p_ab: Choice[A, B]) -> Choice[S, T]:
-        p_sa_sb: Choice[Either[S, A], Either[S, B]] = into_right(p_ab)
-        p = p_sa_sb.dimap(match, lambda s: either(identity, construct, s))
+        p_sa_sb: Choice[Either[T, A], Either[T, B]] = into_right(p_ab)
+        p = p_sa_sb.dimap(match, lambda esb: either(identity, construct, esb))
         return cast(Choice[S, T], p)
 
     return the_prism

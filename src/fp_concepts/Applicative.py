@@ -81,6 +81,16 @@ def lift2[A, B, C](f: Callable[[A, B], C]):
 
     return liftA2
 
+# ATTN: Implement: use_first (<*) and use_second (*>)?
+# def use_first[A, B](fa: Applicative[A], fb: Applicative[B]) -> Applicative[B]:
+#     return fa.map2(lambda a, b: a, fb)
+# ATTN: implement when and unless here? Are they useful??
+# # when : Applicative f => Bool -> f () -> f ()
+# def when(f: type[Applicative], condition: bool, true_case: Applicative[tuple[()]]) -> Applicative[tuple[()]]:
+#     return true_case if condition else f.pure(())
+# # unless : Applicative f => Bool -> f () -> f ()
+# def unless(f: type[Applicative], condition: bool, false_case: Applicative[tuple[()]]) -> Applicative[tuple[()]]:
+#     return f.pure(()) if condition else false_case
 
 # A copy of the Identity Functor that is only an Applicative
 # This is useful as a default applicative in infrastructure

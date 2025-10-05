@@ -19,7 +19,7 @@ __all__ = [
 class EffectfulFunction(Function):
     "Class representing a function that produces an Applicative Functor."
 
-    def __init__(self, f, ap: Applicative):
+    def __init__(self, f, ap: type[Applicative]):
         self._applicative = ap
         super().__init__(f)
 

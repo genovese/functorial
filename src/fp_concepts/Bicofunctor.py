@@ -35,6 +35,12 @@ class Bicofunctor[A, C](Protocol):
 def bicomap[A, B, C, D](f: Callable[[B], A], g: Callable[[C], D], x: Bicofunctor[A, C]) -> Bicofunctor[B, D]:
     return x.bicomap(f, g)
 
+def bicomap_[A, B, C, D](f: Callable[[B], A], g: Callable[[C], D]) -> Callable[[Bicofunctor[A, C]], Bicofunctor[B, D]]:
+    def do_bicomap_(x: Bicofunctor[A, C]) -> Bicofunctor[B, D]:
+        return x.bicomap(f, g)
+
+    return do_bicomap_
+
 def cofirst[A, B, C](f: Callable[[B], A], x: Bicofunctor[A, C]) -> Bicofunctor[B, C]:
     return x.cofirst(f)
 

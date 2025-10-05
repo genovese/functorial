@@ -3,14 +3,16 @@ from __future__   import annotations
 import re
 
 from enum         import StrEnum
-from typing       import Callable
 
 from ..functions  import Function, compose
 
-__all__ = ['Optic', 'OpticIs', 'composed_optic_is']
+__all__ = ['Optic', 'OpticIs', 'OpticTypeError', 'composed_optic_is', 'cast_optic_is']
 
+class OpticTypeError(Exception):
+    "Exception that indicates incompatible optic types for cast or composition."
 
 class OpticIs(StrEnum):
+    "Optic types"
     ISO = "Iso"
     LENS = "Lens"
     PRISM = "Prism"
@@ -23,6 +25,9 @@ class OpticIs(StrEnum):
     FOLD = "Fold"
 
 class Optic(Function):
+    """ATTN:FILL in here
+
+    """
     def __init__(self, f, o_type: OpticIs, **data):
         self._type = o_type
         self._data = data    # ATTN: needed? how used? e.g., Monoid to use etc.
@@ -31,7 +36,7 @@ class Optic(Function):
     def __str__(self):
         return f'{_optic_desc(self._type)} Optic {repr(self)}'
 
-    # add data accessor, e.g., to wrap with the right Monoid
+    # ATTN: add data accessor, e.g., to wrap with the right Monoid
 
     def __matmul__(self, other):
         "Composes two optics."
@@ -53,7 +58,7 @@ class Optic(Function):
         return NotImplemented
 
     def cast_as(self, o_type: OpticIs):
-        return Optic(self._fn, o_type, **self._data)
+        return Optic(self._fn, cast_optic_is(self._type, o_type), **self._data)
 
 def _optic_desc(o_type: OpticIs, start_sentence=True) -> str:
     a = 'A' if start_sentence else 'a'
@@ -64,4 +69,22 @@ def _optic_desc(o_type: OpticIs, start_sentence=True) -> str:
 
 def composed_optic_is(opt1: OpticIs, opt2: OpticIs) -> OpticIs:
     "Returns the type of a composed optics with given constituent types."
+    # ATTN: This is just an example, need more systematic approach
+    if opt1 == OpticIs.LENS and opt2 == OpticIs.PRISM:
+        return OpticIs.ISO
+
     return opt1  # ATTN: THIS IS WRONG
+
+def cast_optic_is(opt_from: OpticIs, opt_to: OpticIs) -> OpticIs:
+    """Checks compatibility of optic types, raising an error if invalid.
+
+    Returns the target type, which will then be valid.
+
+    """
+    # ATTN: This is just an example, need more systematic approach
+    if opt_to == OpticIs.LENS and opt_from == OpticIs.TRAVERSAL:
+        # ATTN: OpticTypeError to be caught by operation to give
+        # a better error message
+        raise OpticTypeError('cannot convert a traversal to a lens')
+
+    return opt_to

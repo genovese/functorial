@@ -9,9 +9,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 
-from .Alternative import Alternative
 from .Applicative import Applicative, map2
 from .Functor     import pymap
 from .Monad       import Monad
@@ -66,7 +65,7 @@ class List[A](list, Monad, Traversable):
     # Example: List.of(1, 2, 3, 4)
 
     @classmethod
-    def of(cls, *xs: tuple[Iterable[A], ...]):
+    def of(cls, *xs: A):
         """Returns a new List with the given arguments as elements.
 
         Examples:
@@ -78,10 +77,11 @@ class List[A](list, Monad, Traversable):
 
     # Functor and IndexedFunctor Instances
 
-    def map[A, B](self, g: Callable[[A], B]):
+    def map[B](self, g: Callable[[A], B]):
         return self.__class__(pymap(g, self))
 
-    def imap[I, A, B](self, g: Callable[[I, A], B]):
+    # def imap[I, B](self, g: Callable[[I, A], B]):
+    def imap[B](self, g: Callable[[int, A], B]):
         return self.__class__(g(i, elt) for i, elt in enumerate(self))
 
     # Applicative Instance
@@ -90,16 +90,16 @@ class List[A](list, Monad, Traversable):
     def pure(cls, a):
         return cls([a])
 
-    def map2[A, B, C](self, g: Callable[[A, B], C], fb: List[B]) -> List[C]:
+    def map2[B, C](self, g: Callable[[A, B], C], fb: List[B]) -> List[C]:
         concat = []
         for a in self:
             for b in fb:
                 concat.append(g(a, b))
-        return self.__class__(concat)
+        return self.__class__(concat)   # type: ignore
 
     # Alternative Instance
 
-    @property
+    @classmethod         # ATTN: 30 Sep 2025 from @property
     def empty(self):
         return self.__class__([])
 
@@ -109,10 +109,10 @@ class List[A](list, Monad, Traversable):
     # Monad Instance
 
     def bind[B](self, g: Callable[[A], List[B]]) -> List[B]:
-        concat = []
+        concat: list[B] = []
         for a in self:
             concat.extend(g(a))
-        return self.__class__(concat)
+        return self.__class__(concat)  # type: ignore
 
     @classmethod
     def __do__(cls, make_generator):
@@ -145,7 +145,7 @@ class List[A](list, Monad, Traversable):
                     m = len(x)
                     if m == 0 and len(positions) == 0:
                         return List()
-                    elif m == 0:
+                    if m == 0:
                         increment(positions)
                         break
 
@@ -209,7 +209,7 @@ class List[A](list, Monad, Traversable):
 # List Utilities
 #
 
-def zip_with[B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B]) -> List[C]:
+def zip_with[A, B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B]) -> List[C]:
     """ATTN
 
     The returned collection has type List even if the arguments are subclasses.
@@ -218,7 +218,7 @@ def zip_with[B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B]) -> List[C]:
     """
     return List(pymap(g, fa, fb))
 
-def zip_longest[B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B], default: C) -> List[C]:
+def zip_longest[A, B, C](g: Callable[[A, B], C], fa: List[A], fb: List[B], default: C) -> List[C]:
     """ATTN
 
     The returned collection has type List even if the arguments are subclasses.
@@ -310,8 +310,8 @@ class NonEmptyList(List):
 #
 
 class ZipList[A](List):
-    def map2[B, C](self, g: Callable[[A, B], C], fb: ZipList[B]) -> ZipList[C]:
-        return self.__class__(pymap(g, self, fb))
+    def map2[B, C](self, g: Callable[[A, B], C], fb: List[B]) -> ZipList[C]:
+        return self.__class__(pymap(g, self, fb))  # type: ignore
 
     def __repr__(self):
         base = super().__repr__()
@@ -319,7 +319,7 @@ class ZipList[A](List):
 
     # There is no Monad Instance
 
-    def bind[B](self, _g: Callable[[A], ZipList[B]]) -> ZipList[B]:
+    def bind[B](self, _g: Callable[[A], List[B]]) -> ZipList[B]:
         raise TypeError('ZipList does not have a Monad instance')
 
     @classmethod

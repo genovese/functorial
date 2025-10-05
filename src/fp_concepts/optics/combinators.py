@@ -7,10 +7,9 @@ from __future__    import annotations
 from operator      import truediv
 from typing        import Callable
 
-from ..Bicofunctor import bicomap, cofirst, cosecond
+from ..Bicofunctor import bicomap_, cofirst, cosecond
 from ..Either      import Left, Right, either
 from ..Identity    import Identity
-from ..List        import List
 from ..Maybe       import maybe, Some
 from ..Monoids     import Monoid, Count, Endo, Sum, Product, mtuple
 from ..Pair        import Pair
@@ -20,7 +19,7 @@ from ..functions   import Function, compose, const, curry, fn_eval, identity, pa
 from ..utils       import Collect
 
 from .Choice       import into_left, into_right
-from .Forget       import Forget
+from .profunctors  import Forget
 from .Optic        import Optic, OpticIs
 from .Review       import preview
 from .Strong       import into_first
@@ -60,8 +59,11 @@ def visit(f, p):
     if hasattr(p, 'visit'):
         return p.visit(f)
 
-    m_tch = lambda s: f(Right, Left, s)
-    build = lambda s, b: Identity.run(f(Identity, const(Identity(b)), s))
+    def m_tch(s):
+        return f(Right, Left, s)
+
+    def build(s):
+        return lambda b: Identity.run(f(Identity, const(Identity(b)), s))
 
     return compose(
         dilift( lambda s: Pair(m_tch(s), s),
@@ -94,7 +96,7 @@ def afold(f):
 def afolding(f):
     def af(s):
         return maybe(Left(s), Right, f(s))
-    return Optic(compose(bicomap(af, Left), into_right), OpticIs.AFFINE_FOLD)
+    return Optic(compose(bicomap_(af, Left), into_right), OpticIs.AFFINE_FOLD)
 
 folded = fold_vl(traverse_)
 foldedA = lambda effect: fold_vl(lambda g: traverse_(g, effect=effect))
@@ -116,7 +118,7 @@ def filtered(predicate):
 # Try the first AffineFold; if it fails, try the second.
 def a_or(a, b):
     def alt(s):
-        return maybe(preview(b, s), Some, preview(a, s))
+        return maybe(preview(b)(s), Some, preview(a)(s))
     return afolding(alt)
 
 #

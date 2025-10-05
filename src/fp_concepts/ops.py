@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .Const       import makeConst, runConst
+from .Const       import makeConst, runConst, typeConst
 from .Monoids     import Monoid
 from .Traversable import Traversable, traverse
 from .functions   import compose as c
@@ -25,5 +25,5 @@ __all__ = ['foldMap']
 #
 
 def foldMap(f: Callable, t: Traversable, m: Monoid = Collect):
-    C = makeConst(m)(0).__class__  # Give access to pure and monoid, which is all we need in traverse
+    C = typeConst(m)  # Give access to pure and monoid, which is all we need in traverse
     return runConst(traverse(c(makeConst(m), f), t, C))
