@@ -28,6 +28,7 @@ class Optic(Function):
     """ATTN:FILL in here
 
     """
+    # ATTN: Add index type here as optional argument with NoIx = Unit
     def __init__(self, f, o_type: OpticIs, **data):
         self._type = o_type
         self._data = data    # ATTN: needed? how used? e.g., Monoid to use etc.
@@ -44,7 +45,11 @@ class Optic(Function):
             opt_type = composed_optic_is(self._type, other._type)
             opt_data = self._data | other._data
 
-            return self.__class__(compose(self._fn, other._fn), opt_type, **opt_data)
+            # ATTN: Need to standardize the args to the non-trivial optic classes
+            # We will have them take **data in second argument but not a type
+            # and instead of .__class__ get the class from the composition
+            # return self.__class__(compose(self._fn, other._fn), opt_type, **opt_data)
+            return self.__class__(compose(self._fn, other._fn), opt_type)
 
         if callable(other):  # Viable case?
             return self.__class__(compose(self._fn, other), self._type, **self._data)

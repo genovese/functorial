@@ -27,6 +27,7 @@ __all__ = [
     'Fold',
     'fold_vl',
     'foldedA',
+    'folded',
     'folding',
     'fold_map_of',
     'fold_of',
@@ -47,16 +48,17 @@ class Fold(Optic):  # ATTN:Placeholder
 def fold_vl(f):
     return Fold(compose(rphantom, wander_(f), rphantom))
 
-folded = fold_vl(traverse_)
+# folded : Foldable f => Fold (f a) a
+folded = fold_vl(traverse_)  # ATTN: This should be Foldable_.traverse_, but that raises a difficulty.
 
 def foldedA(effect):
     return fold_vl(lambda g: traverse_(g, effect=effect))
 
 # Create a Fold from a function returning a foldable result.
-# folding : Foldable => (s -> f a) -> Fold s a
+# folding : Foldable f => (s -> f a) -> Fold s a
 def folding(f):
     g = partial(cofirst, f)
-    return Fold(compose(g, folded))
+    return Fold(compose(g, folded.run))
 
 
 #

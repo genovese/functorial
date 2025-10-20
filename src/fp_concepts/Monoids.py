@@ -54,11 +54,13 @@ __all__ = [
 #
 
 class Semigroup(Protocol):
+    "A semigroup represents a set with an associative, closed binary operation."
     def mcombine(self, x, y):
         ...
 
 @runtime_checkable
 class Monoid(Semigroup, Protocol):
+    "A monoid is a semigroup with an identity/unit element."
     @property
     def munit(self):
         ...
@@ -144,6 +146,7 @@ class FreeM(Monoid):
 
 Free = FreeM()
 
+# ATTN: This should use Maybe
 class FirstM(Monoid):
     "A monoid that takes the first non-missing value."
 
@@ -160,6 +163,7 @@ class FirstM(Monoid):
 
 First = FirstM()
 
+# ATTN: This should use Maybe
 class LastM(Monoid):
     "A monoid that takes the last non-missing value."
 
@@ -188,7 +192,7 @@ class MinM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float)
+        return isinstance(x, (int, float))
 
 Min = MinM()
 
@@ -204,7 +208,7 @@ class MaxM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float)
+        return isinstance(x, (int, float))
 
 Max = MaxM()
 
@@ -220,7 +224,7 @@ class SumM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float) or isinstance(x, complex)
+        return isinstance(x, (int, float, complex))
 
 Sum = SumM()
 
@@ -267,8 +271,8 @@ class ConjunctionM(Monoid):
     def munit(self):
         return True
 
-    def mcombine(self, a, b):
-        return a and b
+    def mcombine(self, x, y):
+        return x and y
 
     def conforms(self, x) -> bool:  # ATTN: Could allow any values here
         return isinstance(x, bool)
@@ -282,8 +286,8 @@ class DisjunctionM(Monoid):
     def munit(self):
         return False
 
-    def mcombine(self, a, b):
-        return a or b
+    def mcombine(self, x, y):
+        return x or y
 
     def conforms(self, x) -> bool:  # ATTN: Could allow any values here
         return isinstance(x, bool)
@@ -302,7 +306,7 @@ class ProductM(Monoid):
 
     def conforms(self, x) -> bool:
         "Checks for primitive numeric value. We would like this to be more general."
-        return isinstance(x, int) or isinstance(x, float) or isinstance(x, complex)
+        return isinstance(x, (int, float, complex))
 
 Product = ProductM()
 

@@ -13,8 +13,10 @@ __all__ = ['Alternative', 'alt', 'guard']
 
 
 #
-# Applicative as a mixin
+# Alternative as a mixin
 #
+
+# ATTN: Should this have a type parameter or be handled like Applicative?
 
 class Alternative[A](Applicative, Protocol):
     @classmethod

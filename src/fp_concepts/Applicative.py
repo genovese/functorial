@@ -12,10 +12,15 @@ from abc             import abstractmethod
 from collections.abc import Callable
 from typing          import Protocol, runtime_checkable
 
-from .Functor        import Functor
-from .functions      import curry, pair, fn_eval
+from .Functor        import Functor, map
+from .functions      import compose, const, curry, identity, pair, fn_eval
 
-__all__ = ['Applicative', 'map2', 'combine', 'pure', 'ap', 'IdentityA', ]
+__all__ = [
+    'Applicative', 'map2', 'combine', 'pure',
+    'ap', 'lift2', 'ap_first', 'ap_second',
+    'when', 'unless',  # ATTN: needed?
+    'IdentityA',
+]
 
 
 #
@@ -66,6 +71,7 @@ def ap(fa_to_b: Applicative | Callable, fa: Applicative, *fs: Applicative, auto_
         fb = fb.ap(fx)
     return fb
 
+# ATTN: by our emerging convention, this should be called map2_, though this name is good too
 def lift2[A, B, C](f: Callable[[A, B], C]):
     """Lifts a two-argument function to a mapping of Applicatives.
 
@@ -81,16 +87,24 @@ def lift2[A, B, C](f: Callable[[A, B], C]):
 
     return liftA2
 
-# ATTN: Implement: use_first (<*) and use_second (*>)?
-# def use_first[A, B](fa: Applicative[A], fb: Applicative[B]) -> Applicative[B]:
-#     return fa.map2(lambda a, b: a, fb)
-# ATTN: implement when and unless here? Are they useful??
-# # when : Applicative f => Bool -> f () -> f ()
-# def when(f: type[Applicative], condition: bool, true_case: Applicative[tuple[()]]) -> Applicative[tuple[()]]:
-#     return true_case if condition else f.pure(())
-# # unless : Applicative f => Bool -> f () -> f ()
-# def unless(f: type[Applicative], condition: bool, false_case: Applicative[tuple[()]]) -> Applicative[tuple[()]]:
-#     return f.pure(()) if condition else false_case
+# (<*) : f a -> f b -> f a
+def ap_first(fa: Applicative, fb: Applicative) -> Applicative:
+    "Sequence actions, disgarding the value of the second argument."
+    return fa.map2(lambda a, b: a, fb)
+
+# (*>) : f a -> f b -> f b
+def ap_second(fa: Applicative, fb: Applicative) -> Applicative:
+    "Sequence actions, disgarding the value of the first argument."
+    return ap(map(compose(identity, const), fa), fb)
+
+# ATTN: implement when and unless here? Are they useful at all for us, as we don't need it for??
+# when : Applicative f => Bool -> f () -> f ()
+def when(f: type[Applicative], condition: bool, true_case: Applicative) -> Applicative:
+    return map(const(()), true_case) if condition else f.pure(())
+
+# unless : Applicative f => Bool -> f () -> f ()
+def unless(f: type[Applicative], condition: bool, false_case: Applicative) -> Applicative:
+    return f.pure(()) if condition else map(const(()), false_case)
 
 # A copy of the Identity Functor that is only an Applicative
 # This is useful as a default applicative in infrastructure
