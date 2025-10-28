@@ -24,6 +24,7 @@ import math
 
 from typing     import Protocol, runtime_checkable
 
+from .Maybe     import Some, None_
 from .functions import compose, identity
 
 __all__ = [
@@ -151,7 +152,22 @@ class FirstM(Monoid):
     "A monoid that takes the first non-missing value."
 
     def mcombine(self, x, y):
-        return y if x is None else x
+        # This is intended to handle Maybe values, but we
+        # can handle non-Maybe values by treating None as None_()
+        # and wrapping the rest in Some.
+        match x:
+            case None_() | None:
+                match y:
+                    case None_() | None:
+                        return None_()
+                    case Some(_):
+                        return y
+                    case _:
+                        return Some(y)
+            case Some(_):
+                return x
+            case _:
+                return Some(x)
 
     @property
     def munit(self):
@@ -168,7 +184,22 @@ class LastM(Monoid):
     "A monoid that takes the last non-missing value."
 
     def mcombine(self, x, y):
-        return x if y is None else y
+        # This is intended to handle Maybe values, but we
+        # can handle non-Maybe values by treating None as None_()
+        # and wrapping the rest in Some.
+        match y:
+            case None_() | None:
+                match x:
+                    case None_() | None:
+                        return None_()
+                    case Some(_):
+                        return x
+                    case _:
+                        return Some(x)
+            case Some(_):
+                return y
+            case _:
+                return Some(y)
 
     @property
     def munit(self):
