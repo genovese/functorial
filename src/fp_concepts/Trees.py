@@ -1,12 +1,50 @@
-#
-# Various forms of Tree as Functors
-#
 # ruff: noqa: N801, N806, E731, EM102
 # pylint: disable=protected-access
 
+""" Various forms of trees implementing the relevant protocols
+
+The Tree types implemented here include:
+
+1. Rose Trees - data in the nodes, arbitrary number of children
+
+   data RoseTree a = Node a (List (RoseTree a))
+
+2. Tipped Binary Trees - data in the branch nodes not at the leaves
+
+   data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
+
+3. Leafy Binary Trees - data at the leaves but not at the branch nodes
+
+   data LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
+
+4. Bushy Binary Trees - data at the leaves and branches of same types
+
+   data BushyBinaryTree a = Leaf a | Branch (BushyBinaryTree a) a (BushyBinaryTree a)
+
+5. Heterogeneous Binary Trees - data at the leaves and branches of different types
+
+   data HetBinaryTree b a = Leaf a | Branch (HetBinaryTree b a) b (HetBinaryTree b a)
+
+6. Tries (aka Prefix Trees)
+
+   data Trie = record Trie whee
+       key        : Maybe a
+       children   : Map k (Trie k m a)
+       annotation : m   -- an associated value or monoidal annotation
+
+7. Tulip Trees - like a Rose tree but with different types on leaf and branches
+
+   data TulipTree b l = Leaf l | Branch b (NonEmptyList HTree b l)
+
+All of these tree types implement appropriate traits such as Functor,
+Applicative, Foldable, Traversable, and the indexed counterparts.
+
+"""
+
 from __future__ import annotations
 
-from collections.abc import Callable, Collection
+from abc             import ABC, abstractmethod
+from collections.abc import Callable
 from functools       import partial
 from typing          import TypeGuard, cast
 
@@ -24,15 +62,18 @@ __all__ = ['BinaryTree', 'Tip', 'is_binary_tree', 'binary_tree', 'complete_btree
 # Helpers
 #
 
-class Tip_:
-    "A standin for None in specifying Binary Trees in s-expression format."
-    def __repr__(self):
-        return 'Tip'
+class NoSExp:
+    "A marker class to prevent s-expression conversion in recursive lists."
 
-    def __bool__(self):
-        return False
+    __match_args__ = ('_value',)
 
-Tip = Tip_()  # Singleton
+    def __init__(self, value):
+        self._value = value
+
+    @property
+    def unwrapped(self):
+        "Unwraps and retuns the underlying value that has been marked NoSExp."
+        return self._value
 
 class SExp(list):
     "A Marker class to distinguish lists as values from lists as s-expressions."
@@ -41,31 +82,242 @@ class SExp(list):
 
     @classmethod
     def of(cls, *xs):
+        "Converts zero or more arguments into a SExp list."
         return cls(list(xs))
 
     @classmethod
     def recurse(cls, lst):
+        """Recursively an s-expression list to SExp lists at every level.
+
+        Values should be wrapped in NoSExp to be excluded from this conversion.
+
+        As an example
+
+            SExp.recurse([4, [(10, 20), [30, NoSExp([40, 50])]]])
+
+        converts all lists (or subclasses) -- but not tuples or other
+        sequences -- to be SExp lists except for the marked [40, 50],
+        which is itself in the returned list.
+
+        """
         def convert(xs):
-            if isinstance(xs, list):
-                return cls.recurse(xs)
-            return xs
+            match xs:
+                case list() if isinstance(xs, list):
+                    return cls.recurse(xs)
+                case NoSExp(value):
+                    return value
+                case _:
+                    return xs
 
         return SExp(map(convert, lst))
 
+
 #
-# Binary Trees
-#
-# type BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
+# Common Structure
 #
 
-class AbstractBinaryTree(IndexedFunctor):  # Abstract Base Class
-    def to_sexp(self):
+class TreeLike(ABC):
+    """Common structure for all tree classes.
+
+    This allows identifying node values and subtrees
+    and provids a basis for a general traversal method.
+
+    """
+
+    @abstractmethod
+    def node_value(self):  # -> Maybe[A]
+        "Returns Some(val) if val is the data in the root node of a subtree, else None_()."
         ...
+
+    @abstractmethod
+    def subtrees(self):
+        "Returns a List of subtrees for the root node of this tree."
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def tree_traverse(effect: type[Applicative], node_fn: Callable, subtree_fn: Callable, tree):
+        "Generic tree traversal, applying node_fn at nodes and subtree_fn at subtree branches."
+        ...
+
+
+#
+# Rose Trees
+#
+# data RoseTree a = Node a (List (RoseTree a))
+#
+
+class RoseTree[A](Applicative):
+    """A Rose Tree which holds data and an arbitrary number of children in each node.
+
+    These have type
+        data RoseTree a = Node a (List (RoseTree a))
+
+    """
+    def __init__(self, sexp: list):
+        "Creates a Rose Tree from s-expression input. See `to_sexp`."
+        if len(sexp) == 0:
+            raise ValueError('Rose tree requires a nonempty root node.')
+
+        val, *children = sexp
+        self._value = val
+        self._subtrees: List = List(RoseTree(child) for child in children)  # Note: mypy forces hint
+
+    def to_sexp(self):
+        """Converts a rose tree to s-expression format.
+
+        A tree is represented by a list [data, children], where
+        children are sub-trees specified by lists in s-expression
+        format. Leaf nodes are thus given by singleton lists
+        [v] with data v.
+
+        Example: [1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]],
+
+        """
+        return List.of(
+            self._value,
+            *[child.to_sexp() for child in self._subtrees]
+        )
 
     def as_str(self, levels=None):
+        "Returns a simple string representation of this tree"
+        if levels is None:
+            levels = []
+        indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
+        lead_a = '\u251c\u2500 '
+        lead_r = '\u2514\u2500 '
+        str_form = [f'{self._value}\n']
+        n = len(self._subtrees)
+        for index, child in enumerate(self._subtrees):
+            if index < n - 1:
+                str_form.append(f'{indent}{lead_a}{child.as_str([*levels, 0])}')
+            else:
+                str_form.append(f'{indent}{lead_r}{child.as_str([*levels, 1])}')
+        return "".join(str_form)
+
+    def __str__(self):
+        return self.as_str().strip()
+
+    @classmethod
+    def make(cls, data: A, subtrees: list) -> RoseTree[A]:
+        "Creates a Rose tree from data a list of subtrees."
+        t = cls([data])
+        t._subtrees = List(subtrees)
+        return t
+
+    @classmethod
+    def unfold[B](cls, gen: Callable[[B], tuple[A, list[B]]], seed: B) -> RoseTree[A]:
+        "Creates a rose tree by repeatedly unfolding a generating function from a starting seed."
+        def unfold_sexp(s):
+            a, seeds = gen(s)
+
+            if len(seeds) == 0:
+                return [a]
+
+            return [a, *[unfold_sexp(seed) for seed in seeds]]
+
+        return RoseTree(unfold_sexp(seed))
+
+    def fold[B](self, f: Callable[[A, list[B]], B]) -> B:
+        """ Folds the tree into a single value.
+
+        This has type Tree a -> (a -> [b] -> b) -> Tree b.
+
+        """
+        def go(t):
+            return f(t._value, map(go, t._subtrees))
+        return go(self)
+
+    def map[B](self, g: Callable[[A], B]):
+        "Functor instance that maps a function over this rose tree."
+        tree: RoseTree = RoseTree([g(self._value)])  # Note: mypy forces annotation here??
+        tree._subtrees = List(map(g, child) for child in self._subtrees)
+        return tree
+
+    def imap[I, B](self, g: Callable[[I, A], B]):
+        "Maps an indexed function over this tree, returning a new tree."
+        def go(index, tree):
+            t = RoseTree([g(index, tree._value)])
+            t._subtrees = imap(lambda j, s: go(index + List.of(j), s), tree._subtrees)
+            return t
+        return go(List(), self)
+
+    @classmethod
+    def pure(cls, a):
+        return RoseTree([a])
+
+    def map2[B, C](self, g: Callable[[A, B], C], fb: RoseTree[B]) -> RoseTree[C]:
+        new_tree: RoseTree = RoseTree([g(self._value, fb._value)])
+
+        h2 = lambda sub_b: map(partial(g, self._value), sub_b)
+        h1 = lambda sub_a: map2(g, sub_a, fb)
+
+        ab_cs = map(h2, fb._subtrees)
+        ab_cs.extend(map(h1, self._subtrees))
+        new_tree._subtrees = ab_cs
+
+        return new_tree
+
+    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:
+        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
+        def go(t):
+            return map2(RoseTree.make, g(t._value), traverse(go, t._subtrees, f))
+
+        return go(self)
+
+    def itraverse[I](self, f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:  # g : a -> f b
+        "Like traverse, but the effectful function (g : i -> a -> f b) takes a node index and value."
+        def go(index, t):
+            return map2(RoseTree.make, g(index, t._value),
+                        itraverse(lambda i, s: go(index + List.of(i), s), t._subtrees, f))
+
+        return go(List(), self)
+
+
+#
+# Binary Trees in varied forms
+#
+# All the Binary Tree variants inherit from this abstract base class
+#
+
+class AbstractBinaryTree(IndexedFunctor, ABC):
+    "Abstract base class for all binary tree variants."
+
+    @abstractmethod
+    def to_sexp(self):
+        "Converts a binary tree to an s-expression format of nested lists."
         ...
 
+    @abstractmethod
+    def as_str(self, levels=None):
+        "Returns a pleasant, human-readable string representation of the tree."
+        ...
+
+class Tip_:            # pylint: disable=invalid-name
+    "An empty tree node used as a leaf in some binary tree variants."
+    def __repr__(self):
+        return 'Tip'
+
+    def __bool__(self):
+        return False
+
+Tip = Tip_()  # Singleton
+
+
+#
+# Tipped Binary Trees, which we take as a default form
+#
+# data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
+#
+
 class BinaryTree[A](AbstractBinaryTree):
+    """Default (Tipped) Binary Trees with data in nodes but not at leaves.
+
+    This type is described by
+
+        data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
+
+    """
     def __init__(self, sexp: list | tuple):
         "Creates a Binary Tree from s-expression input. See `to_sexp`."
         if len(sexp) == 0:  # Handle empty case elsewhere
@@ -76,8 +328,11 @@ class BinaryTree[A](AbstractBinaryTree):
         self._left: BinaryTree[A] | Tip_ = BinaryTree(List(left)) if left else Tip
         self._right: BinaryTree[A] | Tip_ = BinaryTree(List(right)) if right else Tip
 
+        super().__init__()
+
     @classmethod
     def make(cls, data: A, left: BinaryTree[A], right: BinaryTree[A]) -> BinaryTree[A]:
+        "Creates and returns a binary tree with specified data and children."
         t = cls([data, Tip, Tip])
         t._left = left
         t._right = right
@@ -114,12 +369,12 @@ class BinaryTree[A](AbstractBinaryTree):
         if levels is None:
             levels = []
         indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
-        leadL = '\u251c\u2500 '
-        leadR = '\u2514\u2500 '
+        lead_l = '\u251c\u2500 '
+        lead_r = '\u2514\u2500 '
         root = f'{self._value}\n'
         if self._left or self._right:
-            left = f'{indent}{leadL}{self._left.as_str([*levels, 0]) if self._left else "\u25a1\n"}'
-            right = f'{indent}{leadR}{self._right.as_str([*levels, 1]) if self._right else "\u25a1\n"}'
+            left = f'{indent}{lead_l}{self._left.as_str([*levels, 0]) if self._left else "\u25a1\n"}'
+            right = f'{indent}{lead_r}{self._right.as_str([*levels, 1]) if self._right else "\u25a1\n"}'
         else:
             left = right = ''
         return root + left + right
@@ -134,8 +389,8 @@ class BinaryTree[A](AbstractBinaryTree):
             if s is None or s is Tip:
                 return Tip
 
-            a, seedL, seedR = gen(s)
-            return [a, unfold_sexp(seedL), unfold_sexp(seedR)]
+            a, seed_l, seed_r = gen(s)
+            return [a, unfold_sexp(seed_l), unfold_sexp(seed_r)]
 
         return BinaryTree(unfold_sexp(seed))
 
@@ -162,7 +417,8 @@ class BinaryTree[A](AbstractBinaryTree):
         fr = subtree_f(t._right) if t._right else effect.pure(Tip)
         return ap(ap(BinaryTree.make, fa, fl), fr)
 
-    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:
+        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
         def inorder(tree):
             return self._bt_traverse(f, g, inorder, tree)
         return inorder(self)
@@ -172,6 +428,7 @@ class EmptyBinaryTree[A](AbstractBinaryTree):
     "A look-alike representing an empty Binary Tree, for any value type."
     @classmethod
     def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
+        "Creates a binary tree from an arbitrary seed and a function that takes a seed."
         return BinaryTree.unfold(gen, seed)
 
     def to_sexp(self):
@@ -190,6 +447,7 @@ class EmptyBinaryTree[A](AbstractBinaryTree):
         return self
 
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
         return f.pure(self)
 
 def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type inference
@@ -248,137 +506,20 @@ def complete_btree(depth: int) -> BinaryTree[int]:
 
     return BinaryTree.unfold(generate, 0)
 
-#
-# Rose Trees
-#
-# type RoseTree a = Node a (List (RoseTree a))
-#
-
-class RoseTree[A](Applicative):
-    def __init__(self, sexp: list):
-        "Creates a Rose Tree from s-expression input. See `to_sexp`."
-        if len(sexp) == 0:
-            raise ValueError('Rose tree requires a nonempty root node.')
-
-        val, *children = sexp
-        self._value = val
-        self._children: List = List(RoseTree(child) for child in children)  # Note: mypy forces hint
-
-    def to_sexp(self):
-        """Converts a rose tree to s-expression format.
-
-        A tree is represented by a list [data, children], where
-        children are sub-trees specified by lists in s-expression
-        format. Leaf nodes are thus given by singleton lists
-        [v] with data v.
-
-        Example: [1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]],
-
-        """
-        return List.of(
-            self._value,
-            *[child.to_sexp() for child in self._children]
-        )
-
-    def as_str(self, levels=None):
-        "Returns a simple string representation of this tree"
-        if levels is None:
-            levels = []
-        indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
-        leadA = '\u251c\u2500 '
-        leadR = '\u2514\u2500 '
-        str_form = [f'{self._value}\n']
-        n = len(self._children)
-        for index, child in enumerate(self._children):
-            if index < n - 1:
-                str_form.append(f'{indent}{leadA}{child.as_str([*levels, 0])}')
-            else:
-                str_form.append(f'{indent}{leadR}{child.as_str([*levels, 1])}')
-        return "".join(str_form)
-
-    def __str__(self):
-        return self.as_str().strip()
-
-    @classmethod
-    def make(cls, data: A, children: list[A]) -> RoseTree[A]:
-        t = cls([data])
-        t._children = List(children)
-        return t
-
-    @classmethod
-    def unfold[B](cls, gen: Callable[[B], tuple[A, list[B]]], seed: B) -> RoseTree[A]:
-        "Creates a rose tree by repeatedly unfolding a generating function from a starting seed."
-        def unfold_sexp(s):
-            a, seeds = gen(s)
-
-            if len(seeds) == 0:
-                return [a]
-
-            return [a, *[unfold_sexp(seed) for seed in seeds]]
-
-        return RoseTree(unfold_sexp(seed))
-
-    def fold[B](self, f: Callable[[A, list[B]], B]) -> B:
-        """ Folds the tree into a single value.
-
-        This has type Tree a -> (a -> [b] -> b) -> Tree b.
-
-        """
-        def go(t):
-            return f(t._value, map(go, t._children))
-        return go(self)
-
-    def map[B](self, g: Callable[[A], B]):
-        "Functor instance that maps a function over this rose tree."
-        tree: RoseTree = RoseTree([g(self._value)])  # Note: mypy forces annotation here??
-        tree._children = List(map(g, child) for child in self._children)
-        return tree
-
-    def imap[I, B](self, g: Callable[[I, A], B]):
-        "Maps an indexed function over this tree, returning a new tree."
-        def go(index, tree):
-            t = RoseTree([g(index, tree._value)])
-            t._children = imap(lambda j, s: go(index + List.of(j), s), tree._children)
-            return t
-        return go(List(), self)
-
-    @classmethod
-    def pure(cls, a):
-        return RoseTree([a])
-
-    def map2[B, C](self, g: Callable[[A, B], C], fb: RoseTree[B]) -> RoseTree[C]:
-        new_tree: RoseTree = RoseTree([g(self._value, fb._value)])
-
-        h2 = lambda sub_b: map(partial(g, self._value), sub_b)
-        h1 = lambda sub_a: map2(g, sub_a, fb)
-
-        ab_cs = map(h2, fb._children)
-        ab_cs.extend(map(h1, self._children))
-        new_tree._children = ab_cs
-
-        return new_tree
-
-    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
-        def go(t):
-            return map2(RoseTree.make, g(t._value), traverse(go, t._children, f))
-
-        return go(self)
-
-    def itraverse[I](self, f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:  # g : a -> f b
-        def go(index, t):
-            return map2(RoseTree.make, g(index, t._value),
-                        itraverse(lambda i, s: go(index + List.of(i), s), t._children, f))
-
-        return go(List(), self)
-
 
 #
 # Leafy Binary Trees - binary trees with values only in the leaves
 #
-# type LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
+# data LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
 #
 
 class LeafyBinaryTree[A](AbstractBinaryTree):
+    """Binary trees with values only in the leaves.
+
+    These have type
+        data LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
+
+    """
     def __init__(self, sexp: SExp | A):
         """Creates a Leafy Binary Tree from s-expression input. See `to_sexp`.
 
@@ -403,6 +544,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     @classmethod
     def make(cls, node: Either[A, tuple[LeafyBinaryTree[A], LeafyBinaryTree[A]]]) -> LeafyBinaryTree[A]:
+        "Creates and returns a leafy binary tree with specified data or subtrees."
         # ATTN: This is a hack! It fits the semantics of the function and causes no harm.
         t = cls(None)  # type: ignore
         t._node = node
@@ -410,10 +552,12 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     @classmethod
     def leaf(cls, data: A) -> LeafyBinaryTree[A]:
+        "Creates a leafy binary tree singleton from a data value."
         return cls(data)
 
     @classmethod
     def branch(cls, left: LeafyBinaryTree[A], right: LeafyBinaryTree[A]) -> LeafyBinaryTree[A]:
+        "Creates a leafy binary tree branch node from two subtrees."
         return cls(SExp([left.to_sexp(), right.to_sexp()]))
 
     def to_sexp(self):
@@ -455,12 +599,12 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
                 if levels is None:
                     levels = []
                 indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
-                leadL = '\u251c\u2500 '
-                leadR = '\u2514\u2500 '
+                lead_l = '\u251c\u2500 '
+                lead_r = '\u2514\u2500 '
                 root = '\u2022\n'
 
-                left_s = f'{indent}{leadL}{left.as_str([*levels, 0])}'
-                right_s = f'{indent}{leadR}{right.as_str([*levels, 1])}'
+                left_s = f'{indent}{lead_l}{left.as_str([*levels, 0])}'
+                right_s = f'{indent}{lead_r}{right.as_str([*levels, 1])}'
 
                 return root + left_s + right_s
 
@@ -472,6 +616,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     @property
     def root(self):
+        "Returns the underlying root node for processing. Primarily for internal use."
         return self._node
 
     @classmethod
@@ -528,6 +673,41 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
                 raise ValueError('Ill-formed LeafyBinaryTree: node of the wrong type')
 
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
         def inorder(tree):
             return self._lbt_traverse(f, g, inorder, tree)
         return inorder(self)
+
+#
+# Bushy Binary Trees - data at the leaves and branches of same types
+#
+#  data BushyBinaryTree a = Leaf a | Branch (BushyBinaryTree a) a (BushyBinaryTree a)
+#
+
+# ATTN
+
+#
+# Heterogeneous Binary Trees - data at the leaves and branches of different types
+#
+#  data HetBinaryTree b a = Leaf a | Branch (HetBinaryTree b a) b (HetBinaryTree b a)
+#
+
+# ATTN
+
+#
+# Tries (aka Prefix Trees)
+#
+#  data Trie = record Trie whee
+#      key        : Maybe a
+#      children   : Map k (Trie k m a)
+#      annotation : m   -- an associated value or monoidal annotation
+#
+
+# ATTN
+
+#
+# Tulip Trees - like a Rose tree but with different types on leaf and branches
+#
+#   data TulipTree b l = Leaf l | Branch b (NonEmptyList HTree b l)
+
+# ATTN
