@@ -97,3 +97,24 @@ lint.unfixable = [
 section-order = ["future", "standard-library", "first-party", "local-folder", "third-party"]
 lines-between-types = 1
 lines-after-imports = 1
+
+[tool.pylint]
+max-line-length = 120
+max-bool-expr = 8
+min-public-methods = 0
+allowed-redefined-builtins = ["map"]
+disable = [
+    "raw-checker-failed",
+    "bad-inline-option",
+    "locally-disabled",
+    "file-ignored",
+    "suppressed-message",
+    "useless-suppression",
+    "deprecated-pragma",
+    "use-symbolic-message-instead",
+    "use-implicit-booleaness-not-comparison-to-string",
+    "use-implicit-booleaness-not-comparison-to-zero",
+    "too-few-public-methods",
+    "unnecessary-ellipsis",
+    "unnecessary-lambda-assignment"
+]
