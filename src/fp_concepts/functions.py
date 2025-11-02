@@ -45,7 +45,7 @@ def do_curry(fn, n):
     return curried
 
 def compose2(after: Callable, before: Callable) -> Callable:
-    "Returns the composition of two functions, before then after."
+    "Returns the composition of two functions, `after` after `before` (or `before` then `after`)."
     def composed(*x):
         return after(before(*x))
 

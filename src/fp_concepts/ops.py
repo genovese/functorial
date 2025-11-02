@@ -12,6 +12,7 @@ from .utils       import Collect
 
 __all__ = ['foldMap']
 
+# ATTN: Change this to foldMapDefault or default_foldMap
 
 #
 # foldMap : (Monoid m, Traversable t) => (a -> m) -> t a -> m

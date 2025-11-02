@@ -1,5 +1,5 @@
 # ruff: noqa: N801, N806, E731, EM102
-# pylint: disable=protected-access
+# pylint: disable=protected-access, invalid-name
 
 """ Various forms of trees implementing the relevant protocols
 
@@ -9,7 +9,8 @@ The Tree types implemented here include:
 
    data RoseTree a = Node a (List (RoseTree a))
 
-2. Tipped Binary Trees - data in the branch nodes not at the leaves
+2. (Tipped) Binary Trees - data in the branch nodes not at the leaves
+   This is the default form and allows empty trees.
 
    data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
 
@@ -17,27 +18,28 @@ The Tree types implemented here include:
 
    data LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
 
-4. Bushy Binary Trees - data at the leaves and branches of same types
+4. Heterogeneous Binary Trees - data at the leaves and branches of different types
 
-   data BushyBinaryTree a = Leaf a | Branch (BushyBinaryTree a) a (BushyBinaryTree a)
+   data HetBinaryTree b a = Leaf a
+                          | Unary b (HetBinaryTree b a)
+                          | Binary (HetBinaryTree b a) b (HetBinaryTree b a)
 
-5. Heterogeneous Binary Trees - data at the leaves and branches of different types
-
-   data HetBinaryTree b a = Leaf a | Branch (HetBinaryTree b a) b (HetBinaryTree b a)
-
-6. Tries (aka Prefix Trees)
+5. Tries (aka Prefix Trees)
 
    data Trie = record Trie whee
        key        : Maybe a
        children   : Map k (Trie k m a)
        annotation : m   -- an associated value or monoidal annotation
 
-7. Tulip Trees - like a Rose tree but with different types on leaf and branches
+6. Tulip Trees - like a Rose tree but with different types on leaf and branches
 
    data TulipTree b l = Leaf l | Branch b (NonEmptyList HTree b l)
 
 All of these tree types implement appropriate traits such as Functor,
-Applicative, Foldable, Traversable, and the indexed counterparts.
+Applicative, Foldable, Traversable, and their indexed counterparts.
+They also all support the creation of zippers for navigating and
+functionally modifying them.
+
 
 """
 
@@ -52,6 +54,7 @@ from .Applicative import Applicative, map2, ap
 from .Either      import Either, Left, Right
 from .Functor     import IndexedFunctor, map, imap  # pylint: disable=redefined-builtin
 from .List        import List
+from .Monoids     import Monoid
 from .Traversable import traverse, itraverse
 
 __all__ = ['BinaryTree', 'Tip', 'is_binary_tree', 'binary_tree', 'complete_btree',
@@ -218,15 +221,50 @@ class RoseTree[A](Applicative):
 
         return RoseTree(unfold_sexp(seed))
 
-    def fold[B](self, f: Callable[[A, list[B]], B]) -> B:
-        """ Folds the tree into a single value.
+    def foldTree[B](self, f: Callable[[A, list[B]], B]) -> B:
+        """ Folds the tree into a summary value, in inorder sequence.
 
-        This has type Tree a -> (a -> [b] -> b) -> Tree b.
+        This has type Tree a -> (a -> [b] -> b) -> Tree b and is the
+        formal dual of the RoseTree.unfold method.
+
+        See also the fold, foldRight, and foldMap methods.
 
         """
         def go(t):
             return f(t._value, map(go, t._subtrees))
         return go(self)
+
+    def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+        """Reduces a tree to a monoidal value with a monoidal value for each node.
+
+        We could use the default foldMap for traversables here, but this
+        is illustrative and cleaner.
+
+        """
+        def rf(a: A, mvals: list[M]) -> M:
+            return List(mvals).fold(monoid.mcombine, f(a))
+
+        return self.foldTree(rf)
+
+    def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
+        """Left fold of the tree into a summary value, in preorder sequence.
+
+        """
+        def go(init, t):
+            return t.fold(go, f(init, t._value))
+
+        return go(initial, self)
+
+    def foldRight[B](self, f: Callable[[A, B], B], initial: B) -> B:
+        """Right fold of the tree into a single value, in postorder sequence.
+
+        This has type Tree a -> (a -> b -> b) -> Tree b.
+
+        """
+        def go(t, init):
+            return f(t._value, t._subtrees.foldRight(go, init))
+
+        return go(self, initial)
 
     def map[B](self, g: Callable[[A], B]):
         "Functor instance that maps a function over this rose tree."
@@ -338,6 +376,11 @@ class BinaryTree[A](AbstractBinaryTree):
         t._right = right
         return t
 
+    @classmethod
+    def is_leaf(cls, tree: BinaryTree[A]) -> bool:
+        "Is the root of this tree a leaf node (not Tip)?"
+        return tree != Tip and tree._left == Tip and tree._right == Tip
+
     def to_sexp(self):
         """Converts a binary tree to s-expression format.
 
@@ -381,6 +424,20 @@ class BinaryTree[A](AbstractBinaryTree):
 
     def __str__(self):
         return self.as_str().strip()
+
+    @property
+    def contents(self) -> Either[A, tuple[BinaryTree[A] | Tip_, BinaryTree[A] | Tip_]]:
+        """Extract the contents from the root node of this tree.
+
+        Returns either the value for a leaf node (wrapped in Left) or
+        a tuple of subtrees for a branch node (wrapped in Right).
+        At most one of the subtrees can equal Tip.
+
+        """
+        # We know self != Tip here
+        if self.is_leaf(self):
+            return Left(self._value)
+        return Right((self._left, self._right))
 
     @classmethod
     def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
@@ -579,7 +636,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
         so that the result can be modified.
 
         """
-        match self.root:
+        match self.contents:
             case Left(leaf):
                 return leaf
 
@@ -591,7 +648,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     def as_str(self, levels=None):
         "Returns a simple string representation of this tree"
-        match self.root:
+        match self.contents:
             case Left(leaf):
                 return str(leaf) + '\n'
 
@@ -615,8 +672,8 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
         return self.as_str().strip()
 
     @property
-    def root(self):
-        "Returns the underlying root node for processing. Primarily for internal use."
+    def contents(self) -> Either[A, tuple[LeafyBinaryTree[A], LeafyBinaryTree[A]]]:
+        "Returns the contents of the root node for processing."
         return self._node
 
     @classmethod
@@ -634,7 +691,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     def map[B](self, g: Callable[[A], B]) -> LeafyBinaryTree[B]:
         "Maps a function over this binary tree, returning a new tree."
-        match self.root:
+        match self.contents:
             case Left(leaf):
                 return cast(LeafyBinaryTree[B], self.leaf(g(leaf)))  # type: ignore
 
@@ -647,7 +704,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
     def imap[I, B](self, g: Callable[[I, A], B]):
         "Maps an indexed function over this binary tree, returning a new tree."
         def go(index, tree):
-            match tree.root:
+            match tree.contents:
                 case Left(leaf):
                     return self.leaf(g(index, leaf))
 
@@ -660,7 +717,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 
     @staticmethod
     def _lbt_traverse(_effect, node_f, subtree_f, t):
-        match t.root:
+        match t.contents:
             case Left(leaf):
                 return map(LeafyBinaryTree.leaf, node_f(leaf))
 
@@ -672,24 +729,18 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
             case _:
                 raise ValueError('Ill-formed LeafyBinaryTree: node of the wrong type')
 
-    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:
         "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
         def inorder(tree):
             return self._lbt_traverse(f, g, inorder, tree)
         return inorder(self)
 
 #
-# Bushy Binary Trees - data at the leaves and branches of same types
-#
-#  data BushyBinaryTree a = Leaf a | Branch (BushyBinaryTree a) a (BushyBinaryTree a)
-#
-
-# ATTN
-
-#
 # Heterogeneous Binary Trees - data at the leaves and branches of different types
 #
-#  data HetBinaryTree b a = Leaf a | Branch (HetBinaryTree b a) b (HetBinaryTree b a)
+#  data HetBinaryTree b a = Leaf a
+#                         | Unary b (HetBinaryTree b a)
+#                         | Binary (HetBinaryTree b a) b (HetBinaryTree b a)
 #
 
 # ATTN

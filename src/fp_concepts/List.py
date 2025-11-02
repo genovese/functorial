@@ -190,6 +190,12 @@ class List[A](list, Monad, Traversable):
             acc = f(index, acc, elt)
         return acc
 
+    def foldRight[B](self, f: Callable[[A, B], B], initial: B) -> B:
+        state = initial
+        for item in reversed(self):
+            state = f(item, state)
+        return state
+
     # Traversable and IndexedTraversable Instances
 
     def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
