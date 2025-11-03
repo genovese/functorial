@@ -65,15 +65,15 @@ class Reader[R, A](Monad, Profunctor):
         return Reader(bind_reader)
 
     @classmethod
-    def __do__(cls, make_generator):
+    def __do__(cls, make_generator, is_generator):
+        # ATTN: Handle not is_generator case
         def threaded(r):
             generator = make_generator()
-            f = lambda result: generator.send(result)
             try:
-                x = f(None)
+                x = generator.send(None)
                 while True:
                     a = x.run(r)
-                    x = f(a)
+                    x = generator.send(a)
             except StopIteration as finished:
                 return finished.value
 

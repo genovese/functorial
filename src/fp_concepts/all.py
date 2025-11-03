@@ -38,6 +38,7 @@ from .Trees       import *
 from .Writer      import *
 
 from .functions   import *
+from .io          import *
 from .ops         import *
 from .utils       import *
 from .wrappers    import *

@@ -87,14 +87,14 @@ def maybe_examples():
     x = Some(10)
     y = None_()
 
-    @do_fn(Maybe)
+    @effect(Maybe)
     def add3_maybes(mx, my, mz):
         x = yield mx
         y = yield my
         z = yield mz
         return x + y + z
 
-    @do_fn(Maybe)
+    @effect(Maybe)
     def fold_maybes(f, init, maybes):
         acc = init
         for mx in maybes:
@@ -164,13 +164,13 @@ def list_examples():
     u = List.of(Some(1), None_(), Some(2), None_(), Some(3))
     w = ['a', 'b', 'c']
 
-    @do_fn(List)
+    @effect(List)
     def pairs_from(xs, ys):
         x = yield xs
         y = yield ys
         return (x, y)
 
-    @do_fn(List)
+    @effect(List)
     def segs(xs):
         x = yield xs
         y = yield [x - 1, x, x + 1]
@@ -211,7 +211,7 @@ def either_examples():
     def all_eq(la, lb):
         return len(la) == len(lb) and all(a == b for a, b in zip(la, lb))
 
-    @do_fn(Either)
+    @effect(Either)
     def sum3(mx, my, mz):
         x = yield mx
         y = yield my

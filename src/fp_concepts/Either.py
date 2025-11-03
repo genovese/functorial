@@ -36,16 +36,20 @@ class Either[A, B](Monad, Bifunctor, Traversable):
         return Right(b)
 
     @classmethod
-    def __do__(cls, make_generator) -> Either[A, B]:
-        generator = make_generator()
-        f = lambda result: generator.send(result)
+    def __do__(cls, make_generator, is_generator) -> Either[A, B]:
+        if not is_generator:
+            ma = make_generator()
+            if isinstance(ma, cls):
+                return ma
+            return cls.pure(ma)
 
+        generator = make_generator()
         try:
-            x = f(None)
+            x = generator.send(None)
             while True:
                 if isLeft(x):
                     return x
-                x = x.bind(f)
+                x = x.bind(generator.send)
         except StopIteration as finished:
             return cls.pure(finished.value)
 

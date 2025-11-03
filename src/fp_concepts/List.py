@@ -115,7 +115,13 @@ class List[A](list, Monad, Traversable):
         return self.__class__(concat)  # type: ignore
 
     @classmethod
-    def __do__(cls, make_generator):
+    def __do__(cls, make_generator, is_generator):
+        if not is_generator:
+            ma = make_generator()
+            if isinstance(ma, cls):
+                return ma
+            return cls.pure(ma)
+
         def increment(pos: list[tuple[int, int]]) -> int:
             i, m = pos[-1]
             if i + 1 >= m:
@@ -330,5 +336,5 @@ class ZipList[A](List):
         raise TypeError('ZipList does not have a Monad instance')
 
     @classmethod
-    def __do__(cls, make_generator):
+    def __do__(cls, make_generator, is_generator):
         raise TypeError('ZipList does not have a Monad instance')

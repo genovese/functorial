@@ -62,7 +62,9 @@ class WriterBase[A, W](Monad):
         return self.__class__(a2, self._monoid.mcombine(w1, w2))
  
     @classmethod
-    def __do__(cls, make_generator):
+    def __do__(cls, make_generator, is_generator):
+        # ATTN: Handle not is_generator case
+
         generator = make_generator()
 
         def as_writer(x):

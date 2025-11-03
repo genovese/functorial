@@ -63,16 +63,20 @@ class Maybe[A](Monad, Traversable, Alternative, ABC):
         ...
 
     @classmethod
-    def __do__(cls, make_generator) -> Maybe[A]:
-        generator = make_generator()
-        f = lambda result: generator.send(result)
+    def __do__(cls, make_generator, is_generator) -> Maybe[A]:
+        if not is_generator:
+            ma = make_generator()
+            if isinstance(ma, cls):
+                return ma
+            return cls.pure(ma)
 
+        generator = make_generator()
         try:
-            x = f(None)
+            x = generator.send(None)
             while True:
                 if isNone(x):
                     return x
-                x = x.bind(f)
+                x = x.bind(generator.send)
         except StopIteration as finished:
             return Some(finished.value)
 
