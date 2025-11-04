@@ -147,7 +147,6 @@ class FreeM(Monoid):
 
 Free = FreeM()
 
-# ATTN: This should use Maybe
 class FirstM(Monoid):
     "A monoid that takes the first non-missing value."
 
@@ -179,7 +178,6 @@ class FirstM(Monoid):
 
 First = FirstM()
 
-# ATTN: This should use Maybe
 class LastM(Monoid):
     "A monoid that takes the last non-missing value."
 
@@ -350,8 +348,8 @@ class UnionM(Monoid):
     def munit(self):
         return self._base()
 
-    def mcombine(self, a, b):
-        return self._base(a.union(b))
+    def mcombine(self, x, y):
+        return self._base(x.union(y))
 
     def conforms(self, x) -> bool:
         return isinstance(x, self._base)
@@ -367,9 +365,9 @@ class Intersect(Monoid):
     def munit(self):
         return self._universe
 
-    def mcombine(self, a, b):
+    def mcombine(self, x, y):
         cls = self._universe.__class__
-        return cls(a.intersection(b))
+        return cls(x.intersection(y))
 
     def conforms(self, x) -> bool:
         return isinstance(x, self._universe.__class__) and x <= self._universe
@@ -388,8 +386,8 @@ class EndoM(Monoid):
     def munit(self):
         return identity
 
-    def mcombine(self, a, b):
-        return compose(a, b)
+    def mcombine(self, x, y):
+        return compose(x, y)
 
     def conforms(self, x) -> bool:
         # We cannot guarantee that the types are valid
@@ -442,7 +440,7 @@ class MonoidalDictM(Monoid):
             if isinstance(b, list):
                 return [*a, *b]
             return [*a, b]
-        elif isinstance(b, list):
+        if isinstance(b, list):
             return [a, *b]
         return [a, b]
 
@@ -452,7 +450,7 @@ class MonoidalDictM(Monoid):
             if isinstance(b, set):
                 return a | b
             return {*a, b}
-        elif isinstance(b, set):
+        if isinstance(b, set):
             return {a, *b}
         return {a, b}
 

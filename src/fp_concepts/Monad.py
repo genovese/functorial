@@ -111,6 +111,7 @@ def effect(fn, cls=None):
     @wraps(fn)
     def do_do(*args, **kwds):
         make_generator = lambda: fn(*args, **kwds)
-        return cls.__do__(make_generator)
+        is_generator = inspect.isgeneratorfunction(fn)
+        return cls.__do__(make_generator, is_generator)
 
     return do_do

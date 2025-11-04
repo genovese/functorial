@@ -13,11 +13,11 @@ from collections.abc import Callable
 from typing          import Protocol, runtime_checkable
 
 from .Functor        import Functor, map
-from .functions      import compose, const, curry, identity, pair, fn_eval
+from .functions      import compose, const, curry, identity, pair, fn_eval, eval_with
 
 __all__ = [
     'Applicative', 'map2', 'combine', 'pure',
-    'ap', 'lift2', 'ap_first', 'ap_second',
+    'ap', 'lift2', 'ap_first', 'ap_second', 'rev_ap',
     'when', 'unless',  # ATTN: needed?
     'IdentityA',
 ]
@@ -86,6 +86,29 @@ def lift2[A, B, C](f: Callable[[A, B], C]):
         return fa.map2(f, fb)
 
     return liftA2
+
+map2_ = lift2   # Alias for lift2 that matches our naming convention
+
+def rev_ap(fa: Applicative, fa_to_b: Applicative | Callable, auto_curry=True) -> Applicative:
+    """A variant of ap with the arguments reversed and effects resolved in the order given.
+
+    Note that rev_ap differs from flip(ap) in the order in which effects
+    are resolved. The latter would just remap the argument order into ap,
+    but this resolves fa then fa_to_b.
+
+    Unlike ap, this only takes two arguments, but it does do automatic currying
+    if auto_curry is True, which is the default.
+
+    Returns the resulting applicative.
+
+    """
+    if not isinstance(fa_to_b, Applicative):
+        if auto_curry:
+            fa_to_b = fa.pure(curry(fa_to_b))
+        else:
+            fa_to_b = fa.pure(fa_to_b)
+
+    return fa.map2(eval_with, fa_to_b)
 
 # (<*) : f a -> f b -> f a
 def ap_first(fa: Applicative, fb: Applicative) -> Applicative:

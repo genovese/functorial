@@ -17,7 +17,7 @@ __all__ = [
     'pair', 'fst', 'snd', 'with_fst', 'with_snd',
     'triple', 'quadruple', 'swap',
     'is_iterable', 'is_sequence',
-    'compose', 'flip', 'fn_eval', 'eval_on',
+    'compose', 'compose_', 'flip', 'fn_eval', 'eval_with', 'eval_on',
     'curry', 'uncurry', 'partial2',
     'Function',
 ]
@@ -144,6 +144,18 @@ def compose(*fs: Callable) -> Callable:
         f = compose2(g, f)
     return f
 
+def compose_(f: Callable) -> Callable[[Callable], Callable]:
+    """Partial evaluation of function composition.
+
+    The returned function maps a function g to the composition f after g, and
+    maps g_1, ..., g_n to the composition f after g_1 after ... after g_n.
+    Given no arguments, it just returns f.
+
+    """
+    def _composed(*gs: Callable):
+        return compose(f, *gs)
+    return _composed
+
 def curry(f: Callable, n: int | None = None):
     """Returns a curried version of `f`, taking a single argument.
 
@@ -198,6 +210,10 @@ def flip(f):
 
 def fn_eval[A, B](g: Callable[[A], B], a: A) -> B:
     "Evaluates its first argument on its second, returning the results."
+    return g(a)
+
+def eval_with[A, B](a: A, g: Callable[[A], B]) -> B:
+    "Evaluates its second argument on its first, returning the results."
     return g(a)
 
 def eval_on[A, B](a: A) -> Callable[[Callable[[A], B]], B]:

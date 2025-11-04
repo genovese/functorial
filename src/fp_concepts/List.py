@@ -204,16 +204,52 @@ class List[A](list, Monad, Traversable):
 
     # Traversable and IndexedTraversable Instances
 
-    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
-        traversed = f.pure(List())
-        for item in self:
-            traversed = map2(append_, traversed, g(item))
+    # We want traverse/itraverse to be linear, and so the natural approach is
+    #
+    #   traversed = f.pure(List())
+    #   for item in self:
+    #       traversed = map2(append_, traversed, g(item))
+    #   return traversed
+    #
+    # This works for most Applicatives, butfor example with IO,
+    # the mutating append gets re-run and adds to the list
+    # every time the IO object is run. This is bad. But using
+    # safe_append_ instead makes traverse quadratic, which is
+    # also bad.
+    #
+    # So instead, we use a controlled, idempotent mutation
+    # that keeps things efficient and effective. The alternative
+    # is something like difference lists, but we'll only
+    # go there if needed.
+
+    @staticmethod
+    def _unsafe_set(i):
+        "Utility routine for List traversal."
+        def _set(ls, x):
+            ls[i] = x
+            return ls
+
+        return _set
+
+    def traverse(self, f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:
+        """Map each element an action, evaluate these actions in order, and collect the results.
+
+        The effect type is given as the first argument, then the effectful function
+        (g : a -> f b). Returns the list of results in an effectful context (f (List b)).
+
+        """
+        traversed = f.pure(self.__class__(self))
+
+        for index, item in enumerate(self):
+            traversed = map2(List._unsafe_set(index), traversed, g(item))
         return traversed
 
-    def itraverse(self, f: type[Applicative], g: Callable[[int, A], Applicative]) -> Applicative:  # g : i -> a -> f b
-        traversed = f.pure(List())
+    def itraverse(self, f: type[Applicative], g: Callable[[int, A], Applicative]) -> Applicative:
+        """Like traverse, but the effectful function takes index and item."""
+        traversed = f.pure(self.__class__(self))
+
         for index, item in enumerate(self):
-            traversed = map2(append_, traversed, g(index, item))
+            traversed = map2(List._unsafe_set(index), traversed, g(index, item))
         return traversed
 
 
@@ -263,6 +299,12 @@ def append_[A](ls: List[A], x: A) -> List[A]:
     "Flipped version of snoc_ to ensure applicative effects are in the right order."
     ls.append(x)
     return ls
+
+def safe_append_[A](ls: List[A], x: A) -> List[A]:
+    "Flipped version of snoc_ to ensure applicative effects are in the right order."
+    ls2: List[A] = List(ls)
+    ls2.append(x)
+    return ls2
 
 
 #
