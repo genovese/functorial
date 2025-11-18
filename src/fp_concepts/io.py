@@ -34,11 +34,11 @@ def as_io(*xs):
     value of the IO object.
 
     Example:
-        >>> x = [
+        >>> x = List.of(
             IO(lambda: as_io(print("foo"), 10)), IO(lambda: as_io(print("bar"), 20)),
             IO(lambda: as_io(print("zap"), print("ok"), 30)),
             IO(lambda: as_io(print("wow"), print("***"), 40))
-        ]
+        )
         >>> x
         foo
         bar

@@ -58,7 +58,7 @@ from .Monoids     import Monoid
 from .Traversable import traverse, itraverse
 
 __all__ = ['BinaryTree', 'Tip', 'is_binary_tree', 'binary_tree', 'complete_btree',
-           'RoseTree', 'SExp',]
+           'RoseTree', 'SExp', 'Tip_', ]
 
 
 #
@@ -317,6 +317,9 @@ class RoseTree[A](Applicative):
 #
 # All the Binary Tree variants inherit from this abstract base class
 #
+# An empty BinaryTree is a separate (non-exported) class that is
+# matchable through BinaryTree.Empty.
+#
 
 class AbstractBinaryTree(IndexedFunctor, ABC):
     "Abstract base class for all binary tree variants."
@@ -331,6 +334,11 @@ class AbstractBinaryTree(IndexedFunctor, ABC):
         "Returns a pleasant, human-readable string representation of the tree."
         ...
 
+# ATTN: Make EmptyBinaryTree a true singleton with instance Tip
+# We can match or type check with it without problem then.
+# This eliminates Tip_ completely, which will make matching more sensible.
+# Can do more to make this usable but this will be a big improvement.
+
 class Tip_:            # pylint: disable=invalid-name
     "An empty tree node used as a leaf in some binary tree variants."
     def __repr__(self):
@@ -339,7 +347,38 @@ class Tip_:            # pylint: disable=invalid-name
     def __bool__(self):
         return False
 
+    def to_sexp(self):
+        return self
+
 Tip = Tip_()  # Singleton
+
+class EmptyBinaryTree[A](AbstractBinaryTree):
+    "A look-alike representing an empty Binary Tree, for any value type."
+    __match_args__ = ()
+
+    @classmethod
+    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
+        "Creates a binary tree from an arbitrary seed and a function that takes a seed."
+        return BinaryTree.unfold(gen, seed)
+
+    def to_sexp(self):
+        return []
+
+    def __str__(self):
+        return str(Tip)
+
+    def as_str(self, _levels=None):
+        return str(self)
+
+    def map[B](self, _g: Callable[[A], B]):
+        return self
+
+    def imap[I, B](self, _g: Callable[[I, A], B]):
+        return self
+
+    def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
+        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
+        return f.pure(self)
 
 
 #
@@ -356,6 +395,8 @@ class BinaryTree[A](AbstractBinaryTree):
         data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
 
     """
+    __match_args__ = ('_left', '_value', '_right')
+
     def __init__(self, sexp: list | tuple):
         "Creates a Binary Tree from s-expression input. See `to_sexp`."
         if len(sexp) == 0:  # Handle empty case elsewhere
@@ -368,8 +409,10 @@ class BinaryTree[A](AbstractBinaryTree):
 
         super().__init__()
 
+    Empty = EmptyBinaryTree  # Accessible to allow matching; do not want construction.  ATTN: Unify with Tip?
+
     @classmethod
-    def make(cls, data: A, left: BinaryTree[A], right: BinaryTree[A]) -> BinaryTree[A]:
+    def make(cls, data: A, left: BinaryTree[A] | Tip_, right: BinaryTree[A] | Tip_) -> BinaryTree[A]:
         "Creates and returns a binary tree with specified data and children."
         t = cls([data, Tip, Tip])
         t._left = left
@@ -426,7 +469,7 @@ class BinaryTree[A](AbstractBinaryTree):
         return self.as_str().strip()
 
     @property
-    def contents(self) -> Either[A, tuple[BinaryTree[A] | Tip_, BinaryTree[A] | Tip_]]:
+    def contents(self) -> Either[A, tuple[BinaryTree[A] | Tip_, A, BinaryTree[A] | Tip_]]:
         """Extract the contents from the root node of this tree.
 
         Returns either the value for a leaf node (wrapped in Left) or
@@ -437,7 +480,18 @@ class BinaryTree[A](AbstractBinaryTree):
         # We know self != Tip here
         if self.is_leaf(self):
             return Left(self._value)
-        return Right((self._left, self._right))
+        return Right((self._left, self._value, self._right))
+
+    @property
+    def node_contents(self) -> tuple[BinaryTree[A] | Tip_, A, BinaryTree[A] | Tip_]:
+        """Extract the raw contents from the root node of this tree.
+
+        Returns a tuple of subtrees for a branch node, where the
+        subtrees may be tip.
+
+        """
+        # We know self != Tip here
+        return (self._left, self._value, self._right)
 
     @classmethod
     def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
@@ -481,32 +535,6 @@ class BinaryTree[A](AbstractBinaryTree):
         return inorder(self)
 
 
-class EmptyBinaryTree[A](AbstractBinaryTree):
-    "A look-alike representing an empty Binary Tree, for any value type."
-    @classmethod
-    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
-        "Creates a binary tree from an arbitrary seed and a function that takes a seed."
-        return BinaryTree.unfold(gen, seed)
-
-    def to_sexp(self):
-        return []
-
-    def __str__(self):
-        return str(Tip)
-
-    def as_str(self, _levels=None):
-        return str(self)
-
-    def map[B](self, _g: Callable[[A], B]):
-        return self
-
-    def imap[I, B](self, _g: Callable[[I, A], B]):
-        return self
-
-    def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
-        "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
-        return f.pure(self)
-
 def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type inference
     "Tests if object is a Binary Tree."
     return isinstance(t, AbstractBinaryTree)
@@ -539,7 +567,7 @@ def binary_tree(spec=None, left=Tip, right=Tip, *, seed=None, sexp=None):
         return spec   # ATTN: deep copy?
 
     if callable(spec):
-        BinaryTree.unfold(spec, seed)
+        return BinaryTree.unfold(spec, seed)
 
     if not spec and sexp:
         return BinaryTree(sexp)
@@ -625,12 +653,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
         where left and right are either also leafy binary trees
         in s-expression format.
 
-        Example: [1,
-                  [2, [4, Tip, Tip], [5, Tip, Tip]],
-                  [3, [6, Tip, Tip], Tip]]
-
-        When created from input, as in the BinaryTree constructor,
-        any falsy value can stand in for Tip.
+        ATTN
 
         This returns the s-expression as a list rather than a tuple
         so that the result can be modified.

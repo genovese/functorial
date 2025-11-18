@@ -99,8 +99,8 @@ class State[S, A](Monad):
         def threaded(s):
             generator = make_generator()
             try:
-                x = generator.send(None)
                 s1 = s
+                x = generator.send(None)
                 while True:
                     a, s1 = x._state(s1)    # pylint: disable=protected-access
                     x = generator.send(a)
