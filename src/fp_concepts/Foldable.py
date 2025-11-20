@@ -17,7 +17,7 @@ from collections.abc import Callable
 from typing          import Protocol
 
 from .Applicative    import Applicative, IdentityA, ap_second
-from .Maybe          import Maybe, Some, None_
+from .Maybe          import Maybe, Some, Nothing
 from .Monoids        import Conjunction, Disjunction, Endo, First, Monoid
 
 
@@ -73,7 +73,7 @@ class Foldable_[A](Foldable[A]):
 
     def find(self, pred: Callable[[A], bool]) -> Maybe[A]:
         def _find_it(x: A):
-            return Some(x) if pred(x) else None_()
+            return Some(x) if pred(x) else Nothing()
 
         return self.foldM(_find_it, First)
 

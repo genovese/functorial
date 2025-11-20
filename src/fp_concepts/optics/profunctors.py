@@ -10,7 +10,7 @@ from ..Const       import Const, runConst, makeConst, typeConst
 from ..Either      import either_, Left, Right
 from ..Functor     import Functor, lift, map                   # pylint: disable=redefined-builtin
 from ..Identity    import Identity
-from ..Maybe       import None_
+from ..Maybe       import Nothing
 from ..Monoids     import Monoid
 from ..Pair        import Pair
 from ..functions   import Function, compose, const, fst, snd
@@ -129,10 +129,10 @@ class ForgetM[R, A](Strong, Cochoice, Choice):
         return ForgetM(compose(self._a_to_mr, snd))
 
     def into_left(self):
-        return ForgetM(either_(self._a_to_mr, const(None_())))
+        return ForgetM(either_(self._a_to_mr, const(Nothing())))
 
     def into_right(self):
-        return ForgetM(either_(const(None_()), self._a_to_mr))
+        return ForgetM(either_(const(Nothing()), self._a_to_mr))
 
     def unleft(self):
         return ForgetM(compose(Left, self._a_to_mr))

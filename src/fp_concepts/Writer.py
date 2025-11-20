@@ -1,31 +1,29 @@
 #
-# The Reader Monad
+# The Writer Monad
 #
 # newtype Writer w a = Writer { runWriter : Pair a w }
 #
 #
 from __future__      import annotations
 
-from operator        import itemgetter
 from collections.abc import Callable
-from typing          import TypeGuard
+from typing          import cast
 
-from .Functor        import Functor
-from .Applicative    import Applicative
-from .Maybe          import Maybe, None_, Some, maybe
+from .Maybe          import Maybe, Nothing
 from .Monad          import Monad
 from .Monoids        import Monoid, Free
-from .Pair           import Pair, pair
-from .functions      import compose, identity
+from .Pair           import Pair
+from .functions      import compose
 
 __all__ = ['Writer', 'runWriter', 'execWriter', 'tell']
 
 class WriterBase[A, W](Monad):
     _monoid = Free
- 
+
     def __init__(self, value: A, annotation: W | None = None):
-        self._value = Pair(value, annotation or self._monoid.munit)
- 
+        self._value: Pair[A, W] = Pair(value, annotation or self._monoid.munit)
+        super().__init__()
+
     #
     # ``Running'' Reader with the given environment
     #
@@ -33,14 +31,14 @@ class WriterBase[A, W](Monad):
     @property
     def run(self) -> Pair[A, W]:
         return self._value
- 
+
     #
     # Functor, Applicative, and Monad Implementations
     #
- 
-    def map[B](self, g: Callable[[A], B]) -> Writer[B, W]:
+
+    def map[B](self, g: Callable[[A], B]) -> WriterBase[B, W]:
         return self.__class__(g(self._value[0]), self._value[1])
- 
+
     @classmethod
     def pure(cls, a):
         return cls(a)
@@ -49,18 +47,18 @@ class WriterBase[A, W](Monad):
     def writer(cls, a: A, w: W | None = None):
         return cls(a, w or cls._monoid.munit)
 
-    def map2[B, C](self, g:Callable[[A, B], C], fb: Writer[B, W]) -> Writer[C, W]:
+    def map2[B, C](self, g: Callable[[A, B], C], fb: WriterBase[B, W]) -> WriterBase[C, W]:
         a1, w1 = self.run
         a2, w2 = fb.run
 
         return self.__class__(g(a1, a2), self._monoid.mcombine(w1, w2))
-        
-    def bind[B](self, g: Callable[[A], Writer[W, B]]) -> Writer[W, B]:
+
+    def bind[B](self, g: Callable[[A], WriterBase[W, B]]) -> WriterBase[W, B]:
         a1, w1 = self.run
         a2, w2 = g(a1).run
- 
+
         return self.__class__(a2, self._monoid.mcombine(w1, w2))
- 
+
     @classmethod
     def __do__(cls, make_generator, is_generator):
         # ATTN: Handle not is_generator case
@@ -85,8 +83,8 @@ class WriterBase[A, W](Monad):
                 x = f(a)
         except StopIteration as finished:
             return cls(finished.value, log)
- 
-    def dimap[C, S](self, f: Callable[[S], R], g: Callable[[A], C]) -> Writer[S, C]:
+
+    def dimap[C, S](self, f: Callable[[S], W], g: Callable[[A], C]) -> WriterBase[S, C]:
         return Writer(compose(g, self._reader, f))
 
 writers_registry = {Free: WriterBase}
@@ -101,7 +99,7 @@ def make_writer(monoid: Monoid):
     writers_registry[monoid] = Writer_
     return Writer_
 
-def Writer(monoid: Monoid = Free, value: Maybe[A] = None_(), annotation: Maybe[W] = None_()):
+def Writer[A, W](monoid: Monoid = Free, value: Maybe[A] = Nothing(), annotation: Maybe[W] = Nothing()):
     w_class = make_writer(monoid)
 
     if not value:
@@ -113,10 +111,10 @@ def Writer(monoid: Monoid = Free, value: Maybe[A] = None_(), annotation: Maybe[W
 # Writer Utilties (esp useful in do blocks)
 #
 
-def runWriter[W, A](w: Writer[W, A]) -> Pair[A, W]:
+def runWriter[W, A](w: WriterBase[W, A]) -> Pair[A, W]:
     return w.run
 
-def execWriter[W, A](w: Writer[W, A]) -> W:
+def execWriter[W, A](w: WriterBase[W, A]) -> W:
     return w.run[1]
 
 def tell(w, which=WriterBase):
@@ -125,6 +123,6 @@ def tell(w, which=WriterBase):
         monoid = which
     elif hasattr(which, '_monoid'):
         monoid = getattr(which, '_monoid')
-        
+
     wc = make_writer(monoid)
     return wc((), w)

@@ -70,7 +70,7 @@ class List[A](list, Monad, Traversable):
 
         Examples:
           + List.of(1, 2, 3, 4)
-          + List.of(Some(4), None_(), Some(10))
+          + List.of(Some(4), Nothing(), Some(10))
 
         """
         return cls(xs)

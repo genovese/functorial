@@ -85,7 +85,7 @@ def test_applicative():
 
 def maybe_examples():
     x = Some(10)
-    y = None_()
+    y = Nothing()
 
     @effect(Maybe)
     def add3_maybes(mx, my, mz):
@@ -107,7 +107,7 @@ def maybe_examples():
         xs = yield Some([10, 20, 30, 40])
         ind = xs.index(20)
         if ind < 0:
-            return None_()
+            return Nothing()
         return ind
 
     @do(Maybe, Some([10, 20, 30, 40]))
@@ -115,13 +115,13 @@ def maybe_examples():
         xs = yield mxs
         ind = xs.index(20)
         if ind < 0:
-            return None_()
+            return Nothing()
         return ind
 
     # Pattern matching works nicely
     def match_maybe(m):
         match m:
-            case None_():
+            case Nothing():
                 return 'None'
             case Some(x):
                 return f'Some {x}'
@@ -132,18 +132,18 @@ def maybe_examples():
         (x.get(0), 10, None),
         (y.get(0), 0, None),
         (map(inc, x), Some(11), None),
-        (map(inc, y), None_(),  None),
+        (map(inc, y), Nothing(),  None),
         (add3_maybes(Some(10), Some(20), Some(30)), Some(60), None),
-        (add3_maybes(Some(10), None_(), Some(30)), None_(), None),
-        (add3_maybes(None_(), None_(), Some(30)), None_(), None),
-        (add3_maybes(None_(), Some(200), Some(100)), None_(), None),
-        (add3_maybes(Some(300), Some(200), None_()), None_(), None),
+        (add3_maybes(Some(10), Nothing(), Some(30)), Nothing(), None),
+        (add3_maybes(Nothing(), Nothing(), Some(30)), Nothing(), None),
+        (add3_maybes(Nothing(), Some(200), Some(100)), Nothing(), None),
+        (add3_maybes(Some(300), Some(200), Nothing()), Nothing(), None),
         (add3_maybes(Some(300), Some(200), Some(100)), Some(600), None),
         (fold_maybes(add, 0, [Some(300), Some(200), Some(100)]), Some(600), None),
-        (fold_maybes(add, 0, [Some(300), None_(), Some(100)]), None_(), None),
+        (fold_maybes(add, 0, [Some(300), Nothing(), Some(100)]), Nothing(), None),
         (got20a, Some(1), None),
         (got20b, Some(1), None),
-        (match_maybe(None_()), 'None', None),
+        (match_maybe(Nothing()), 'None', None),
         (match_maybe(Some(16)), 'Some 16', None),
         (match_maybe(Some("foo")), 'Some foo', None),
     ]
@@ -161,7 +161,7 @@ def list_examples():
         return len(ma) == len(mb) and all(a == b for a, b in zip(ma, mb))
 
     z = List.of(1, 2, 3, 4, 5)
-    u = List.of(Some(1), None_(), Some(2), None_(), Some(3))
+    u = List.of(Some(1), Nothing(), Some(2), Nothing(), Some(3))
     w = ['a', 'b', 'c']
 
     @effect(List)
@@ -187,7 +187,7 @@ def list_examples():
 
     return [
         (map(inc, z), List.of(2, 3, 4, 5, 6), eq),
-        (map(incF, u), List.of(Some(2), None_(), Some(3), None_(), Some(4)), eq),
+        (map(incF, u), List.of(Some(2), Nothing(), Some(3), Nothing(), Some(4)), eq),
         (map(parenthesize, List(w)), List(['(a)', '(b)', '(c)']), eq),
         (pairs_from([1, 2, 3], [4, 5, 6]), List([(1, 4), (1, 5), (1, 6), (2, 4), (2, 5), (2, 6), (3, 4), (3, 5), (3, 6)]), eq),
         (pairs_from([1, 2, 3], [10, 20]), List([(1, 10), (1, 20), (2, 10), (2, 20), (3, 10), (3, 20)]), eq),

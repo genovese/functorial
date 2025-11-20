@@ -24,7 +24,7 @@ import math
 
 from typing     import Protocol, runtime_checkable
 
-from .Maybe     import Some, None_
+from .Maybe     import Some, Nothing
 from .functions import compose, identity
 
 __all__ = [
@@ -152,13 +152,13 @@ class FirstM(Monoid):
 
     def mcombine(self, x, y):
         # This is intended to handle Maybe values, but we
-        # can handle non-Maybe values by treating None as None_()
+        # can handle non-Maybe values by treating None as Nothing()
         # and wrapping the rest in Some.
         match x:
-            case None_() | None:
+            case Nothing() | None:
                 match y:
-                    case None_() | None:
-                        return None_()
+                    case Nothing() | None:
+                        return Nothing()
                     case Some(_):
                         return y
                     case _:
@@ -183,13 +183,13 @@ class LastM(Monoid):
 
     def mcombine(self, x, y):
         # This is intended to handle Maybe values, but we
-        # can handle non-Maybe values by treating None as None_()
+        # can handle non-Maybe values by treating None as Nothing()
         # and wrapping the rest in Some.
         match y:
-            case None_() | None:
+            case Nothing() | None:
                 match x:
-                    case None_() | None:
-                        return None_()
+                    case Nothing() | None:
+                        return Nothing()
                     case Some(_):
                         return x
                     case _:

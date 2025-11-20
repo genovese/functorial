@@ -129,7 +129,7 @@ class TreeLike(ABC):
 
     @abstractmethod
     def node_value(self):  # -> Maybe[A]
-        "Returns Some(val) if val is the data in the root node of a subtree, else None_()."
+        "Returns Some(val) if val is the data in the root node of a subtree, else Nothing()."
         ...
 
     @abstractmethod
@@ -454,22 +454,24 @@ class BinaryTree[A](AbstractBinaryTree):
         "Returns a simple string representation of this tree"
         if levels is None:
             levels = []
-        indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
-        lead_l = '\u251c\u2500 '
-        lead_r = '\u2514\u2500 '
+        lead_r = '\u251c\u2500 '
+        lead_l = '\u2514\u2500 '
         root = f'{self._value}\n'
         if self._left or self._right:
+            indent = ''.join('\u2502  ' if level == 1 else '   ' for level in levels)
             left = f'{indent}{lead_l}{self._left.as_str([*levels, 0]) if self._left else "\u25a1\n"}'
             right = f'{indent}{lead_r}{self._right.as_str([*levels, 1]) if self._right else "\u25a1\n"}'
         else:
             left = right = ''
-        return root + left + right
+
+        # Put the left subtrees on the bottom so the tree is rotationally consistent
+        return root + right + left
 
     def __str__(self):
         return self.as_str().strip()
 
     @property
-    def contents(self) -> Either[A, tuple[BinaryTree[A] | Tip_, A, BinaryTree[A] | Tip_]]:
+    def contents(self) -> Either[A, tuple[BinaryTree[A] | EmptyBinaryTree[A], A, BinaryTree[A] | EmptyBinaryTree[A]]]:
         """Extract the contents from the root node of this tree.
 
         Returns either the value for a leaf node (wrapped in Left) or

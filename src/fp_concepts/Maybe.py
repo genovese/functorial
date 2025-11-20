@@ -1,7 +1,7 @@
 #
 # The Maybe Monad
 #
-# type Maybe a = None | Some a
+# type Maybe a = Nothing | Some a
 #
 # This represents a context in which a value of a particular type
 # may be present or may be missing. It is a Functor, an Applicative,
@@ -29,7 +29,7 @@ from .Monad       import Monad
 from .Traversable import Traversable
 from .Unit        import Unit
 
-__all__ = ['Maybe', 'None_', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
+__all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
 
 
 class Maybe[A](Monad, Traversable, Alternative, ABC):
@@ -51,7 +51,7 @@ class Maybe[A](Monad, Traversable, Alternative, ABC):
 
     @property
     def empty(self):
-        return None_()
+        return Nothing()
 
     def alt(self, fb: Maybe[A]) -> Maybe[A]:   # type: ignore
         if not self:
@@ -111,10 +111,10 @@ class Some[A](Maybe[A]):
         try:
             return Some(g(self._value))
         except Exception:
-            return None_()
+            return Nothing()
 
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
-        if isinstance(fb, None_):
+        if isinstance(fb, Nothing):
             return fb
         return Some(g(self._value, fb._value))  # type: ignore
 
@@ -129,15 +129,15 @@ class Some[A](Maybe[A]):
         # g : () -> a -> f b
         return map(Some, g((), self._value))
 
-class None_[A](Maybe[A]):   # The name None is already taken
+class Nothing[A](Maybe[A]):   # The name None is already taken
     def __str__(self):
         return 'None'
 
     def __repr__(self):
-        return 'None_()'
+        return 'Nothing()'
 
     def __eq__(self, other):
-        if isinstance(other, None_):
+        if isinstance(other, Nothing):
             return True
         return False
 
@@ -148,13 +148,13 @@ class None_[A](Maybe[A]):   # The name None is already taken
         return default
 
     def map[B](self, _g: Callable[[A], B]) -> Maybe[B]:
-        return cast(None_[B], self)
+        return cast(Nothing[B], self)
 
     def map2[B, C](self, _g: Callable[[A, B], C], _fb: Maybe[B]) -> Maybe[C]:
-        return cast(None_[C], self)
+        return cast(Nothing[C], self)
 
     def bind[B](self, _f: Callable[[A], Maybe[B]]) -> Maybe[B]:
-        return cast(None_[B], self)
+        return cast(Nothing[B], self)
 
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:
         # g : a -> f b
@@ -164,8 +164,8 @@ class None_[A](Maybe[A]):   # The name None is already taken
         # g : () -> a -> f b
         return f.pure(self)
 
-def isNone[A](x: Maybe[A]) -> TypeGuard[None_]:
-    return isinstance(x, None_)
+def isNone[A](x: Maybe[A]) -> TypeGuard[Nothing]:
+    return isinstance(x, Nothing)
 
 def isSome[A](x: Maybe[A]) -> TypeGuard[Some]:
     return isinstance(x, Some)
@@ -173,13 +173,13 @@ def isSome[A](x: Maybe[A]) -> TypeGuard[Some]:
 def maybe[A, B](default: B, f: Callable[[A], B], m: Maybe[A]) -> B:
     """Extracts a transformed value from a Maybe by case analysis.
 
-    If given a None_, return the specified value (i.e., apply the
+    If given a Nothing, return the specified value (i.e., apply the
     constant function to its value); if given a Some,
     apply the function f. Returns the resulting value.
 
     """
     match m:
-        case None_():
+        case Nothing():
             return default
         case Some(b):
             return f(b)

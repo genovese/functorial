@@ -1,6 +1,6 @@
 #
 # A simple implementation of van Laarhoven optics: Lenses, Prisms, Traversals, and Folds
-# 
+#
 # alias Functor f =>     Lens a b s t = (a -> f b) -> s -> f t
 # alias Applicative f => Traversal a b s t = (a -> f b) -> s -> f t
 #
@@ -13,14 +13,15 @@ from copy         import copy
 from functools    import partial
 from operator     import itemgetter
 
-from .Applicative import Applicative, ap
-from .Const       import Const, makeConst, runConst 
+from .Applicative import ap
+from .Const       import Const, makeConst, runConst
 from .Functor     import lift, map
 from .Identity    import Identity
 from .List        import List
+from .Maybe       import Nothing, Some
 from .Trees       import complete_btree
 from .utils       import Collect
-from .functions   import compose, identity, partial2, pair, triple
+from .functions   import compose, identity, pair, triple
 
 __all__ = [
     'lens', 'view', 'collect', 'over', 'put',
@@ -425,20 +426,20 @@ if __name__ == '__main__':
 
     collect_maybes = lambda f: folded(c(f, collect))
 
-    view(collect_maybes)( List.of(Some(4), None_(), Some(10), None_(), Some(16)) )
+    view(collect_maybes)( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
 
     def keep(predicate, transform=identity):
         return lambda f: folded(c(f, lambda x: List.of(transform(x)) if predicate(x) else List()))
 
     fromSome = lambda x: x._value  # example
-    view(keep(isSome, fromSome))( List.of(Some(4), None_(), Some(10), None_(), Some(16)) )
+    view(keep(isSome, fromSome))( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
     somes = keep(isSome, fromSome)
-    view(somes)( List.of(Some(4), None_(), Some(10), None_(), Some(16)) )
+    view(somes)( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
     x = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
-    us = map(lambda x: Some(x) if x % 2 == 0 else None_(), x)
+    us = map(lambda x: Some(x) if x % 2 == 0 else Nothing(), x)
     view(somes)(us)
     #=> [4, 10, 16]
 
