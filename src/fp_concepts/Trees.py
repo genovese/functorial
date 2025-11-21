@@ -61,9 +61,12 @@ from .singleton   import ContingentSingletonFromABC, FinalAttribute
 if TYPE_CHECKING:
     from .Functor import IndexedFunctor
 
-__all__ = ['BinaryTree', 'Tip', 'AbstractBinaryTree', 'RoseTree', 'LeafyBinaryTree',
-           'SExp', 'NoSExp',
-           'is_binary_tree', 'binary_tree', 'complete_btree',]
+__all__ = [
+    'BinaryTree', 'Tip', 'BinaryTreeType',
+    'RoseTree', 'LeafyBinaryTree',
+    'SExp', 'NoSExp',
+    'is_binary_tree', 'binary_tree', 'complete_btree',
+]
 
 
 #
@@ -324,9 +327,9 @@ class RoseTree[A](Applicative):
 #
 # The empty BinaryTree class can be accessed through BinaryTree.Empty,
 # e.g., for pattern matching.  Tip is the singleton value of the
-# empty tree. One still needs to import EmptyBinaryTree for specific
-# type statements, but using AbstractBinaryTree should be sufficient
-# for that purpose.
+# empty tree. For types, one needs to use BinaryTreeType[A] to comprise
+# both non-empty and empty binary trees. This is annoying but seems
+# like the best of several bad options.
 #
 # The concrete Binary Trees implement the IndexedFunctor protocol.
 #
@@ -553,10 +556,11 @@ class BinaryTree[A](AbstractBinaryTree, metaclass=ContingentSingletonFromABC):
             return self._bt_traverse(f, g, inorder, tree)
         return inorder(self)
 
+type BinaryTreeType[A] = BinaryTree[A] | EmptyBinaryTree[A]
 
-def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type inference
+def is_binary_tree(t) -> TypeGuard[BinaryTreeType]:   # Duck typing here for type inference
     "Tests if object is a Binary Tree."
-    return isinstance(t, AbstractBinaryTree) or t == Tip
+    return t == Tip or isinstance(t, AbstractBinaryTree)
 
 def binary_tree(spec=None, left=Tip, right=Tip, *, seed=None, sexp=None):
     """Smart binary tree constructor.
