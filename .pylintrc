@@ -1,5 +1,8 @@
 [DESIGN]
 
+# Maximum number of return statements in a function (see R0915)
+max-returns = 10
+
 # Maximum number of boolean expressions in an if statement (see R0916).
 max-bool-expr = 8
 

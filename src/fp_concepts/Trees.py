@@ -48,17 +48,22 @@ from __future__ import annotations
 from abc             import ABC, abstractmethod
 from collections.abc import Callable
 from functools       import partial
-from typing          import TypeGuard, cast
+from typing          import TYPE_CHECKING, TypeGuard, cast
 
 from .Applicative import Applicative, map2, ap
 from .Either      import Either, Left, Right
-from .Functor     import IndexedFunctor, map, imap  # pylint: disable=redefined-builtin
+from .Functor     import map, imap  # pylint: disable=redefined-builtin
 from .List        import List
 from .Monoids     import Monoid
 from .Traversable import traverse, itraverse
+from .singleton   import ContingentSingletonFromABC, FinalAttribute
 
-__all__ = ['BinaryTree', 'Tip', 'is_binary_tree', 'binary_tree', 'complete_btree',
-           'RoseTree', 'SExp', 'Tip_', ]
+if TYPE_CHECKING:
+    from .Functor import IndexedFunctor
+
+__all__ = ['BinaryTree', 'Tip', 'AbstractBinaryTree', 'RoseTree', 'LeafyBinaryTree',
+           'SExp', 'NoSExp',
+           'is_binary_tree', 'binary_tree', 'complete_btree',]
 
 
 #
@@ -317,11 +322,16 @@ class RoseTree[A](Applicative):
 #
 # All the Binary Tree variants inherit from this abstract base class
 #
-# An empty BinaryTree is a separate (non-exported) class that is
-# matchable through BinaryTree.Empty.
+# The empty BinaryTree class can be accessed through BinaryTree.Empty,
+# e.g., for pattern matching.  Tip is the singleton value of the
+# empty tree. One still needs to import EmptyBinaryTree for specific
+# type statements, but using AbstractBinaryTree should be sufficient
+# for that purpose.
+#
+# The concrete Binary Trees implement the IndexedFunctor protocol.
 #
 
-class AbstractBinaryTree(IndexedFunctor, ABC):
+class AbstractBinaryTree(ABC, metaclass=ContingentSingletonFromABC):
     "Abstract base class for all binary tree variants."
 
     @abstractmethod
@@ -334,52 +344,64 @@ class AbstractBinaryTree(IndexedFunctor, ABC):
         "Returns a pleasant, human-readable string representation of the tree."
         ...
 
-# ATTN: Make EmptyBinaryTree a true singleton with instance Tip
-# We can match or type check with it without problem then.
-# This eliminates Tip_ completely, which will make matching more sensible.
-# Can do more to make this usable but this will be a big improvement.
+class EmptyBinaryTree[A](AbstractBinaryTree, metaclass=ContingentSingletonFromABC):
+    """A look-alike representing an empty Binary Tree, for any value type.
 
-class Tip_:            # pylint: disable=invalid-name
-    "An empty tree node used as a leaf in some binary tree variants."
-    def __repr__(self):
-        return 'Tip'
+    This is an immutable object with no data and attempting to
+    change its attributes will lead to an error. It is also a singleton
+    class, so all instances will be shared.
+
+    Fur users, this common instance will be called Tip. It can be
+    pattern matched with BinaryTree.Empty() in a match statement.
+    For most type signatures, use AbstractBinaryTree, but if this is
+    needed in particular (hard to see why it would be), then it will
+    have to be imported explicitly.
+
+    """
+    __match_args__ = ()
+
+    IS_SINGLETON = FinalAttribute(True)
+
+    @classmethod
+    def unfold[B](
+            cls,
+            gen: Callable[[B], tuple[A, B | EmptyBinaryTree[A] | None, B | EmptyBinaryTree[A] | None]],
+            seed: B
+    ) -> BinaryTree[A]:
+        "Creates a binary tree from an arbitrary seed and a function that takes a seed."
+        return BinaryTree.unfold(gen, seed)
 
     def __bool__(self):
         return False
 
     def to_sexp(self):
-        return self
-
-Tip = Tip_()  # Singleton
-
-class EmptyBinaryTree[A](AbstractBinaryTree):
-    "A look-alike representing an empty Binary Tree, for any value type."
-    __match_args__ = ()
-
-    @classmethod
-    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
-        "Creates a binary tree from an arbitrary seed and a function that takes a seed."
-        return BinaryTree.unfold(gen, seed)
-
-    def to_sexp(self):
-        return []
+        return self  # [] ??
 
     def __str__(self):
-        return str(Tip)
+        return 'Tip'
+
+    def __repr__(self):
+        return str(self)
+
+    def __setattr__(self, name, value):
+        raise AttributeError('An empty binary tree cannot be modified.')
 
     def as_str(self, _levels=None):
         return str(self)
 
     def map[B](self, _g: Callable[[A], B]):
+        """Mapping on an empty tree just gives an empty tree."""
         return self
 
     def imap[I, B](self, _g: Callable[[I, A], B]):
+        """Mapping on an empty tree just gives an empty tree."""
         return self
 
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         "Applies an effectful function (a -> f b) to each node, collecting results as a same-shaped tree."
         return f.pure(self)
 
+Tip: EmptyBinaryTree = EmptyBinaryTree()
 
 #
 # Tipped Binary Trees, which we take as a default form
@@ -387,7 +409,7 @@ class EmptyBinaryTree[A](AbstractBinaryTree):
 # data BinaryTree a = Tip | Node (BinaryTree a) a (BinaryTree a)
 #
 
-class BinaryTree[A](AbstractBinaryTree):
+class BinaryTree[A](AbstractBinaryTree, metaclass=ContingentSingletonFromABC):
     """Default (Tipped) Binary Trees with data in nodes but not at leaves.
 
     This type is described by
@@ -404,15 +426,20 @@ class BinaryTree[A](AbstractBinaryTree):
 
         val, left, right, *_ = sexp
         self._value = val
-        self._left: BinaryTree[A] | Tip_ = BinaryTree(List(left)) if left else Tip
-        self._right: BinaryTree[A] | Tip_ = BinaryTree(List(right)) if right else Tip
+        self._left: BinaryTree[A] | EmptyBinaryTree[A] = BinaryTree(List(left)) if left else Tip
+        self._right: BinaryTree[A] | EmptyBinaryTree[A] = BinaryTree(List(right)) if right else Tip
 
         super().__init__()
 
-    Empty = EmptyBinaryTree  # Accessible to allow matching; do not want construction.  ATTN: Unify with Tip?
+    Empty = EmptyBinaryTree  # Accessible to allow matching; construction just returns Tip.
 
     @classmethod
-    def make(cls, data: A, left: BinaryTree[A] | Tip_, right: BinaryTree[A] | Tip_) -> BinaryTree[A]:
+    def make(
+            cls,
+            data: A,
+            left: BinaryTree[A] | EmptyBinaryTree[A],
+            right: BinaryTree[A] | EmptyBinaryTree[A]
+    ) -> BinaryTree[A]:
         "Creates and returns a binary tree with specified data and children."
         t = cls([data, Tip, Tip])
         t._left = left
@@ -471,32 +498,22 @@ class BinaryTree[A](AbstractBinaryTree):
         return self.as_str().strip()
 
     @property
-    def contents(self) -> Either[A, tuple[BinaryTree[A] | EmptyBinaryTree[A], A, BinaryTree[A] | EmptyBinaryTree[A]]]:
-        """Extract the contents from the root node of this tree.
-
-        Returns either the value for a leaf node (wrapped in Left) or
-        a tuple of subtrees for a branch node (wrapped in Right).
-        At most one of the subtrees can equal Tip.
-
-        """
-        # We know self != Tip here
-        if self.is_leaf(self):
-            return Left(self._value)
-        return Right((self._left, self._value, self._right))
-
-    @property
-    def node_contents(self) -> tuple[BinaryTree[A] | Tip_, A, BinaryTree[A] | Tip_]:
+    def contents(self) -> tuple[BinaryTree[A] | EmptyBinaryTree[A], A, BinaryTree[A] | EmptyBinaryTree[A]]:
         """Extract the raw contents from the root node of this tree.
 
         Returns a tuple of subtrees for a branch node, where the
-        subtrees may be tip.
+        subtrees may equal Tip.
 
         """
         # We know self != Tip here
         return (self._left, self._value, self._right)
 
     @classmethod
-    def unfold[B](cls, gen: Callable[[B], tuple[A, B | Tip_ | None, B | Tip_ | None]], seed: B) -> BinaryTree[A]:
+    def unfold[B](
+            cls,
+            gen: Callable[[B], tuple[A, B | EmptyBinaryTree[A] | None, B | EmptyBinaryTree[A] | None]],
+            seed: B
+    ) -> BinaryTree[A]:
         "Creates a binary tree by repeatedly unfolding a generating function from a starting seed."
         def unfold_sexp(s):
             if s is None or s is Tip:
@@ -539,7 +556,7 @@ class BinaryTree[A](AbstractBinaryTree):
 
 def is_binary_tree(t) -> TypeGuard[BinaryTree]:   # Duck typing here for type inference
     "Tests if object is a Binary Tree."
-    return isinstance(t, AbstractBinaryTree)
+    return isinstance(t, AbstractBinaryTree) or t == Tip
 
 def binary_tree(spec=None, left=Tip, right=Tip, *, seed=None, sexp=None):
     """Smart binary tree constructor.
@@ -681,14 +698,15 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
                 if levels is None:
                     levels = []
                 indent = ''.join('\u2502  ' if level == 0 else '   ' for level in levels)
-                lead_l = '\u251c\u2500 '
-                lead_r = '\u2514\u2500 '
+                lead_r = '\u251c\u2500 '
+                lead_l = '\u2514\u2500 '
                 root = '\u2022\n'
 
                 left_s = f'{indent}{lead_l}{left.as_str([*levels, 0])}'
                 right_s = f'{indent}{lead_r}{right.as_str([*levels, 1])}'
 
-                return root + left_s + right_s
+                # Put the left subtrees on the bottom so the tree is rotationally consistent
+                return root + right_s + left_s
 
             case _:
                 raise ValueError('Ill-formed LeafyBinaryTree: node of the wrong type')
@@ -787,3 +805,12 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 #   data TulipTree b l = Leaf l | Branch b (NonEmptyList HTree b l)
 
 # ATTN
+
+
+#
+# Checking Protocol Compliance
+#
+
+if TYPE_CHECKING:
+    _bt_check: type[IndexedFunctor] = BinaryTree
+    _et_check: type[IndexedFunctor] = EmptyBinaryTree

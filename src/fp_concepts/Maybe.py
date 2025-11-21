@@ -24,7 +24,7 @@ from typing          import TypeGuard, cast
 
 from .Alternative import Alternative
 from .Applicative import Applicative
-from .Functor     import map
+from .Functor     import map               # pylint: disable=redefined-builtin
 from .Monad       import Monad
 from .Traversable import Traversable
 from .Unit        import Unit
@@ -32,6 +32,14 @@ from .Unit        import Unit
 __all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
 
 
+# ATTN: If making Nothing a ContingentSingletonFromABC
+# We'll need to rely only on the protocols here and not inheritance except for ABC.
+# Can add compliance checks at the end.
+#
+# from singleton import ContingentSingletonFromABC
+#
+# We'll need to rely only on the protocols here and not inheritance except for ABC
+#               vvv      vvv         vvv
 class Maybe[A](Monad, Traversable, Alternative, ABC):
     @abstractmethod
     def get(self, default: A) -> A:
