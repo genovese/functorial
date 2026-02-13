@@ -8,7 +8,7 @@
 # and a Monad.
 #
 # We can destructure Maybe's with pattern matching or the maybe
-# function, the functions isNone and isSome provide (type guarding)
+# function, the functions isNothing and isSome provide (type guarding)
 # predicates.
 #
 # See List for utility functions map_maybe and cat_maybes.
@@ -29,7 +29,7 @@ from .Monad       import Monad
 from .Traversable import Traversable
 from .Unit        import Unit
 
-__all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'isNone', 'isSome',]
+__all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'isNothing', 'isSome',]
 
 
 # ATTN: If making Nothing a ContingentSingletonFromABC
@@ -82,7 +82,7 @@ class Maybe[A](Monad, Traversable, Alternative, ABC):
         try:
             x = generator.send(None)
             while True:
-                if isNone(x):
+                if isNothing(x):
                     return x
                 x = x.bind(generator.send)
         except StopIteration as finished:
@@ -118,7 +118,7 @@ class Some[A](Maybe[A]):
     def map[B](self, g: Callable[[A], B]) -> Maybe[B]:
         try:
             return Some(g(self._value))
-        except Exception:
+        except Exception:     # ATTN: What exception type is sufficiently general here (but not too general)?
             return Nothing()
 
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
@@ -137,7 +137,7 @@ class Some[A](Maybe[A]):
         # g : () -> a -> f b
         return map(Some, g((), self._value))
 
-class Nothing[A](Maybe[A]):   # The name None is already taken
+class Nothing[A](Maybe[A]):
     def __str__(self):
         return 'None'
 
@@ -172,7 +172,7 @@ class Nothing[A](Maybe[A]):   # The name None is already taken
         # g : () -> a -> f b
         return f.pure(self)
 
-def isNone[A](x: Maybe[A]) -> TypeGuard[Nothing]:
+def isNothing[A](x: Maybe[A]) -> TypeGuard[Nothing]:
     return isinstance(x, Nothing)
 
 def isSome[A](x: Maybe[A]) -> TypeGuard[Some]:
