@@ -11,7 +11,7 @@ We represent these as functions.
 from __future__ import annotations
 from typing     import Any, Callable, cast
 
-from fp_concepts.Monad import Monad
+from .monad import Monad
 
 __all__ = ['IO', 'as_io',]
 

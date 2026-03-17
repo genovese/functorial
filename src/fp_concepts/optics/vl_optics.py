@@ -7,21 +7,22 @@
 # ...
 #
 
-from __future__   import annotations
+from __future__    import annotations
 
-from copy         import copy
-from functools    import partial
-from operator     import itemgetter
+from copy          import copy
+from functools     import partial
+from operator      import itemgetter
+from typing        import TypeGuard
 
-from .Applicative import ap
-from .Const       import Const, makeConst, runConst
-from .Functor     import lift, map
-from .Identity    import Identity
-from .List        import List
-from .Maybe       import Nothing, Some
-from .Trees       import complete_btree
-from .utils       import Collect
-from .functions   import compose, identity, pair, triple
+from ..applicative import ap
+from ..const       import Const, makeConst, runConst
+from ..functor     import lift, map                       # pylint: disable=redefined-builtin
+from ..identity    import Identity
+from ..list        import List
+from ..maybe       import Nothing, Some
+from ..trees       import complete_btree
+from ..utils       import Collect
+from ..functions   import compose, identity, pair, triple
 
 __all__ = [
     'lens', 'view', 'collect', 'over', 'put',
@@ -88,8 +89,8 @@ def itemsetter_immutable(k):
 #
 # Note that ideally the setter is immutable, like most below,
 # but mutable changes are supported (see itemsetter).
-#   
-#   lens : (s -> a) -> (s -> b -> t) -> (a -> f b) -> s -> f t  
+#
+#   lens : (s -> a) -> (s -> b -> t) -> (a -> f b) -> s -> f t
 #
 def lens(getter, setter):
     """Constructs a lens from a getter and setter function.
@@ -150,7 +151,7 @@ def chars(f):
 def char(k):
     "Lens on a specific character of a string."
     def char_set(s, c):
-        return s[:k] + c + s[(k+1):]
+        return s[:k] + c + s[(k + 1):]
     return lens(itemgetter(k), char_set)
 
 def at(k):
@@ -272,6 +273,7 @@ def seq(optic1, optic2):
     def in_seq(a_fb):
         ell1 = optic1(a_fb)
         ell2 = optic2(a_fb)
+
         def activate(s):
             ft1 = ell1(s)
 
@@ -311,9 +313,14 @@ def capitalize(s: str) -> str:
 #
 
 
-
 # ATTN: Example results out of date
 if __name__ == '__main__':
+    from ..trees    import RoseTree
+    from ..maybe    import isSome
+    from ..monoids  import First, Monoid
+    from ..ops      import foldMap
+    from ..wrappers import get_effect
+
     c = compose
     inc = lambda x: x + 1
 
@@ -364,7 +371,7 @@ if __name__ == '__main__':
     view(last)(List.of(1, 9, 3, 4))
     #=> [4]
     
-    u = map(lambda k: (list(range(k + 1)), "(" + str(k) + ")"), complete_btree(3))
+    u = map(lambda k: (list(range(k + 1)), "(" + str(k) + ")"), complete_btree(3))  # type: ignore
     print(over(c(mapped, first, last), lambda k: k * 1000)(u))
     # ([0], '(0)')
     # ├─ ([0, 1000], '(1)')
@@ -401,12 +408,12 @@ if __name__ == '__main__':
     #=> 'abcdefghiJklmnopqrstuvwxyz'
 
     # Saving for later
-    def folded(a_to_Cma, m=Collect):
+    def foldedSave(a_to_Cma, m=Collect):
         def folded_on(s):
             return Const(foldMap(c(runConst, a_to_Cma), s, m=m), monoid=m)
         return folded_on
 
-    def folded(a_to_Cma, m=Collect):
+    def foldedSave2(a_to_Cma, m=Collect):
         f = get_effect(a_to_Cma)
         monoid = getattr(f, 'monoid', None) or m or Collect
         def folded_on(s):
@@ -415,14 +422,14 @@ if __name__ == '__main__':
 
     def folded(a_to_Cma, use={Monoid: Collect}):
         def folded_on(s):
-            return Const(foldMap(c(runConst, a_to_Cma), s, m=m), monoid=use[Monoid])
+            return Const(foldMap(c(runConst, a_to_Cma), s, m=use[Monoid]), monoid=use[Monoid])
         return folded_on
      
     def foldMapOf(l, f, m=Collect):
         return c(runConst, l(c(makeConst(m), f)))
 
-    def collect(x):
-        return maybe(List(), List.of, x)
+    # def collect(x):
+    #     return maybe(List(), List.of, x)
 
     collect_maybes = lambda f: folded(c(f, collect))
 
@@ -438,18 +445,16 @@ if __name__ == '__main__':
     somes = keep(isSome, fromSome)
     view(somes)( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
-    x = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
-    us = map(lambda x: Some(x) if x % 2 == 0 else Nothing(), x)
+    x: RoseTree[int] = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
+    us = map(lambda x: Some(x) if x % 2 == 0 else Nothing(), x)  # type: ignore
     view(somes)(us)
     #=> [4, 10, 16]
 
-    is_string = lambda s: isinstance(s, str)
     view(keep(is_string))( List.of(4, Some(5), "foo", Some("bar"), "bar", {}, "zap") )
     #=> ['foo', 'bar', 'zap']
 
     x = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
-    ts = map(lambda x: f'u({x})' if x % 2 == 0 else x, x)
-    is_string = lambda s: isinstance(s, str)
+    ts = map(lambda x: f'u({x})' if x % 2 == 0 else x, x)    # type: ignore
     view(keep(is_string))(ts)
     #=> ['u(2)', 'u(4)', 'u(6)', 'u(8)', 'u(10)']
     strings = keep(is_string)

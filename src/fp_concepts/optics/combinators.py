@@ -7,22 +7,22 @@ from __future__    import annotations
 from operator      import truediv
 from typing        import Callable
 
-from ..Bicofunctor import bicomap_, cofirst, cosecond
-from ..Either      import Left, Right, either
-from ..Identity    import Identity
-from ..Maybe       import maybe, Some
-from ..Monoids     import Monoid, Count, Endo, Sum, Product, mtuple
-from ..Pair        import Pair
-from ..Profunctor  import dilift, rmap
-from ..Traversable import traverse_
+from ..bicofunctor import bicomap_, cofirst, cosecond
+from ..either      import Left, Right, either
+from ..identity    import Identity
+from ..maybe       import maybe, Some
+from ..monoids     import Monoid, Count, Endo, Sum, Product, mtuple
+from ..pair        import Pair
+from ..profunctor  import dilift, rmap
+from ..traversable import traverse_
 from ..functions   import Function, compose, const, curry, fn_eval, identity, partial, uncurry
 from ..utils       import Collect
 
-from .Choice       import into_left, into_right
+from .choice       import into_left, into_right
 from .profunctors  import Forget
-from .Optic        import Optic, OpticIs
-from .Review       import preview
-from .Strong       import into_first
+from .optic        import Optic, OpticIs
+from .review       import preview
+from .strong       import into_first
 
 #
 # Generic Functions for instances

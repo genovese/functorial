@@ -5,11 +5,11 @@
 
 from __future__   import annotations
 
-from .Applicative import Applicative
-from .Monoids     import Monoid
-from .Identity    import Identity
-from .List        import List
-from .Maybe       import Maybe, maybe
+from .applicative import Applicative
+from .monoids     import Monoid
+from .identity    import Identity
+from .list        import List
+from .maybe       import Maybe, maybe
 from .functions   import compose
 from .wrappers    import EffectfulFunction
 

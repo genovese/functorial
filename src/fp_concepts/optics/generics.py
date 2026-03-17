@@ -6,15 +6,15 @@
 
 from __future__    import annotations
 
-from ..Bicofunctor import cosecond
-from ..Either      import Left, Right, either
-from ..Identity    import Identity
-from ..Pair        import Pair
-from ..Profunctor  import dilift, rmap
+from ..bicofunctor import cosecond
+from ..either      import Left, Right, either
+from ..identity    import Identity
+from ..pair        import Pair
+from ..profunctor  import dilift, rmap
 from ..functions   import compose, const, identity
 
-from .Choice       import into_left
-from .Strong       import into_first
+from .choice       import into_left
+from .strong       import into_first
 
 #
 # Generic Functions for instances

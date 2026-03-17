@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from .Applicative import Applicative
+from .applicative import Applicative
 from .functions   import Function
 
 __all__ = [

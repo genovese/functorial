@@ -262,7 +262,7 @@ def is_sequence(x) -> TypeGuard[Sequence]:
 #
 
 # To make this an actual profunctor, put Function in its own module
-# from .Profunctor     import Profunctor
+# from .profunctor     import Profunctor
 
 class Function:
     """A class that wraps functions to support pipe and composition operators.

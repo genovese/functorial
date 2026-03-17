@@ -7,35 +7,35 @@
 
 from __future__ import annotations
 
-from . import Monoids
+from . import monoids
 from . import optics
 
-from .Alternative import *
-from .Applicative import *
-from .Bicofunctor import *
-from .Bifunctor   import *
-from .CoFunctor   import *
-from .Foldable    import *
-from .Functor     import *
-from .Monad       import *
-from .Profunctor  import *
-from .Traversable import *
+from .alternative import *
+from .applicative import *
+from .bicofunctor import *
+from .bifunctor   import *
+from .cofunctor   import *
+from .foldable    import *
+from .functor     import *
+from .monad       import *
+from .profunctor  import *
+from .traversable import *
 
-from .Const       import *
-from .Either      import *
-from .Identity    import *
-from .List        import *
-from .Maybe       import *
-from .NTuple      import *
-from .Pair        import *
+from .const       import *
+from .either      import *
+from .identity    import *
+from .list        import *
+from .maybe       import *
+from .ntuple      import *
+from .pair        import *
 
-from .Dict        import *
-from .Monoids     import Monoid, munit, mcombine
-from .Reader      import *
-from .Set         import *
-from .State       import *
-from .Trees       import *
-from .Writer      import *
+from .dict        import *
+from .monoids     import Monoid, munit, mcombine
+from .reader      import *
+from .set         import *
+from .state       import *
+from .trees       import *
+from .writer      import *
 
 from .functions   import *
 from .io          import *
@@ -43,7 +43,7 @@ from .ops         import *
 from .utils       import *
 from .wrappers    import *
 
-from .Pair        import pair  # More powerful version over .functions.pair
+from .pair        import pair  # More powerful version over .functions.pair
 
 from .optics.all  import *
 

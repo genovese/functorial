@@ -1,28 +1,3 @@
-"""Concrete profunctors for use in optics methods.
-
-"""
-from __future__    import annotations
-
-from typing        import Callable, Self
-
-from ..bicofunctor import Bicofunctor
-from ..const       import Const, runConst, makeConst, typeConst
-from ..either      import either_, Left, Right
-from ..functor     import Functor, lift, map                   # pylint: disable=redefined-builtin
-from ..identity    import Identity
-from ..maybe       import Nothing
-from ..monoids     import Monoid
-from ..pair        import Pair
-from ..functions   import Function, compose, const, fst, snd
-from ..utils       import MissingMonoid, eff
-
-from .choice       import Choice
-from .cochoice     import Cochoice
-from .strong       import Strong
-
-__all__ = ['Forget', 'ForgetM', 'Star']
-
-
 #
 # Forget is a profunctor whose second argument is a phantom type (ignored)
 #
@@ -30,6 +5,25 @@ __all__ = ['Forget', 'ForgetM', 'Star']
 #
 # This is isomorphic to Star (Const r) but arises enough that it is
 # worth having a name for it.
+
+from __future__    import annotations
+
+from typing        import Callable
+
+from ..bicofunctor import Bicofunctor
+from ..const       import Const, runConst, makeConst, typeConst
+from ..either      import either_, Left, Right
+from ..maybe       import Nothing
+from ..monoids     import Monoid
+from ..functions   import Function, compose, const, fst, snd
+from ..utils       import MissingMonoid, eff
+
+from .choice       import Choice
+from .cochoice     import Cochoice
+from .strong       import Strong
+
+__all__ = ['Forget', 'ForgetM']
+
 
 class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
     """A profunctor representing a mapping to a fixed type.
@@ -57,11 +51,10 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
     ):
         self._a_to_r = Function(a_to_r)
         self._monoid = monoid
-        super().__init__()
 
     @classmethod
-    def run(cls, fg: Self):
-        return fg._a_to_r    # pylint: disable=protected-access
+    def run(cls, fg):
+        return fg._a_to_r
 
     def dimap(self, f, _):
         return Forget(compose(self._a_to_r, f), self._monoid)
@@ -113,11 +106,10 @@ class ForgetM[R, A](Strong, Cochoice, Choice):
     """
     def __init__(self, r_to_a: Callable[[A], R]):
         self._a_to_mr = Function(r_to_a)
-        super().__init__()
 
     @classmethod
     def run(cls, fg):
-        return fg._a_to_mr    # pylint: disable=protected-access
+        return fg._a_to_mr
 
     def dimap(self, f, _):
         return ForgetM(compose(self._a_to_mr, f))
@@ -142,75 +134,3 @@ class ForgetM[R, A](Strong, Cochoice, Choice):
 
     def bicomap[B](self, f: Callable[[B], A], _g: Callable) -> ForgetM[R, B]:
         return ForgetM(compose(self._a_to_mr, f))
-
-#
-# Star is a profunctor that lifts a functor into a profunctor.
-#
-# newtype Star f a b = Star { runStar :: a -> f b }
-#
-# This is represents Kleisli arrows.
-#
-
-# class Star[A, B](Strong, Choice):
-#     "ATTN"
-#     def __init__(self, a_to_fb: Callable[[A], Functor[B]], effect: type[Functor]):
-#         self._a_to_fb = Function(a_to_fb)
-#         self._effect = effect
-#         super().__init__()
-#
-#     def dimap[C, D](self, f: Callable[[C], A], g: Callable[[B], D]) -> Star[C, D]:
-#         return Star(compose(lift(g), self._a_to_fb, f), self._effect)
-
-
-class Star[A, B](Strong, Choice):
-    """A wrapper for the type a -> f b for Functor f : Type -> Type.
-
-    This is an instance of various classes:
-
-    + ATTN
-
-    """
-    def __init__(self, a_to_fb: Callable[[A], Functor[B]], effect: type[Functor] = Identity):
-        self._fn = a_to_fb
-        self._functor = effect
-
-    def run(self):
-        return self._fn
-
-    def dimap(self, f, g):
-        return Star(compose(lift(g), self._fn, f), self._functor)
-
-    def into_first(self):
-        def inj_first(v):
-            a, _ = v
-            return map(Pair(v).with_second, self._fn(a))
-        return Star(inj_first, self._functor)
-
-    def into_second(self):
-        def inj_second(v):
-            _, a = v
-            return map(Pair(v).with_first, self._fn(a))
-        return Star(inj_second, self._functor)
-
-    def into_left(self):
-        # require applicative _functor
-        g = either_(compose(lift(Left), self._fn), compose(self._functor.pure, Right))
-        return Star(g, self._functor)
-
-    def into_right(self):
-        # require applicative _functor
-        g = either_(compose(self._functor.pure, Left), compose(lift(Right), self._fn))
-        return Star(g, self._functor)
-
-    def wander1(self, f):  # f : (a -> f b) -> (s -> f t)
-        g = f(self._fn)
-        return Star(g, self._functor)
-
-    def wander(self, f):  # f : (a -> f b) -> (s -> f t)
-        g = f(self._fn)
-        return Star(g, self._functor)
-
-    def visit(self, f):   # f : forall r. (r -> f r) -> (a -> f b) -> (s -> f t)
-        # require applicative _functor
-        g = f(self._functor.pure, self._fn)
-        return Star(g, self._functor)

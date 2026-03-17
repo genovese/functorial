@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .Const       import makeConst, runConst, typeConst
-from .Monoids     import Monoid
-from .Traversable import Traversable, traverse
+from .const       import makeConst, runConst, typeConst
+from .monoids     import Monoid
+from .traversable import Traversable, traverse
 from .functions   import compose as c
 from .utils       import Collect
 
