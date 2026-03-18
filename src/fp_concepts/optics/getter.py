@@ -1,107 +1,52 @@
-#
-# A Getter s a is an optic of type
-#
-#   type Getter s a = (Profunctor p, Bicofunctor p, Cochoice p) => p a a -> p s s
-#
-# Such a p, being covariant and contravariant in its second type argument,
-# must have a phantom second type argument. Being a contravariant functor
-# and Cochoice, implies that p a b must be isomorphic to a constant
-# function on a, e.g., a -> ().
-#
-# Thus, Getter s a is isomorphic to
-#
-#   type Getter s a = Getter { runGetter :: s -> a }
-#
-# The function getter below lifts a functio s -> a to such an object.
-#
+"""Getter -- read-only optics focusing on exactly one element.
+
+A Getter s a extracts a single value of type a from a structure s.
+It is the read-only counterpart of Lens: you can view but not modify.
+
+  type Getter s a =
+      forall p. (Profunctor p, Bicofunctor p, Cochoice p) => p a a -> p s s
+
+Any Getter can be used as an AffineFold or Fold.
+
+"""
 
 from __future__    import annotations
 
 from typing        import Callable, cast
 
-from ..bicofunctor import Bicofunctor
-from ..either      import Left, Right
-from ..profunctor  import Profunctor, dilift  # , lmap
+from ..profunctor  import dilift
 from ..functions   import Function, identity
 
-from .cochoice     import Cochoice
+from .generics     import absurd
+from .optic        import Optic, OpticIs
 from .profunctors  import Forget
 
-__all__ = ['view', 'view_with', 'getter']
+__all__ = ['Getter', 'view', 'view_with', 'getter']
 
 
-def absurd(*args, **kwargs):
-    raise TypeError('Getter is read only; rmap component is a phantom.')
+class Getter(Optic):
+    """A read-only optic extracting exactly one element."""
+    def __init__(self, f):
+        super().__init__(f, OpticIs.GETTER)
 
-# ATTN: Not sure this is really needed
-# class A_Getter[T, U](Cochoice, Bicofunctor):
-#     """Constraint wrapper for domain and codomain of a Getter.
-#
-#     This is primarily used for typing. See `getter` below.
-#
-#     """
-#     def __init__(self, p: Profunctor[T, U]):
-#         self._p = p
-#
-#     def dimap[V, W](self, f: Callable[[V], T], _g: Callable[[U], W]) -> A_Getter[V, W]:
-#         return A_Getter[V, W](self._p.dimap(f, cast(Callable[[U], W], absurd)))
-#
-#     def bicomap[V, W](self, f: Callable[[V], T], _g: Callable[[W], U]) -> A_Getter[V, W]:  # type: ignore
-#         return A_Getter[V, W](self._p.dimap(f, cast(Callable[[U], W], absurd)))
-#
-#     def unleft(self):
-#         return A_Getter(self._p.dimap(Left, absurd))
-#
-#     def unright(self):
-#         return A_Getter(self._p.dimap(Right, absurd))
-#
-# type Getter[S, A] = Callable[[A_Getter[A, A]], A_Getter[S, S]]
-
-
-#
-# Combinators
-#
 
 idF: Forget = Forget(identity)
 
-def view(optic):
-    """Returns the value pointed to by a Getter.
 
-    """
+def view(optic) -> Function:
+    """Returns the single focus of a Getter as a function s -> a."""
     return Forget.run(optic(idF))
 
-def view_with(optic, f=identity):
-    """Returns the value pointed to by a Getter transformed by a function.
 
-    """
+def view_with(optic, f=identity) -> Function:
+    """Returns the focus of a Getter transformed by f, as a function s -> b."""
     return Forget.run(optic(Forget(f)))
 
-def getter[S, A](f: Callable[[S], A]):
-    """Builds and returns a Getter from a function from structure to substructure.
+
+def getter[S, A](f: Callable[[S], A]) -> Getter:
+    """Builds a Getter from a function mapping structure to focus.
+
+    getter :: (s -> a) -> Getter s a
 
     """
-    # Hard to make work and fragile
-    # def do_get(pf):
-    #     class A_Getter(pf.__class__):
-    #         "Constraint wrapper for domain and codomain of a Getter."
-    #         def __new__(cls, *contents):
-    #             return super().__new__(cls, *contents)
-    #
-    #         def dimap[V, W](self, f: Callable[[V], S], _g: Callable[[A], W]) -> A_Getter[V, W]:
-    #             return A_Getter[V, W](pf.dimap(f, cast(Callable[[A], W], absurd)))
-    #
-    #         def bicomap[V, W](self, f: Callable[[V], S], _g: Callable[[W], A]) -> A_Getter[V, W]:  # type: ignore
-    #             return A_Getter[V, W](pf.dimap(f, cast(Callable[[A], W], absurd)))
-    #
-    #         def unleft(self):
-    #             return A_Getter(pf.dimap(Left, absurd))
-    #
-    #         def unright(self):
-    #             return A_Getter(pf.dimap(Right, absurd))
-    #
-    #     return A_Getter(pf)
-    #
-    # return Function(do_get)
-
-    # Old and simple way
-    return dilift(Function(f), cast(Callable[[A], S], absurd))
+    return Getter(dilift(Function(f), cast(Callable[[A], S], absurd)))

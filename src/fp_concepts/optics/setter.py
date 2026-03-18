@@ -1,20 +1,64 @@
-"""Setters ATTN
+"""Setter optics and modification operations.
+
+A Setter is the most general read-write optic. Any optic that has a
+wander or visit method (Traversal, AffineTraversal, Lens, Prism,
+Iso) can be used for modification via over and put.
+
+The canonical approach is to pass Star(Identity) into the optic and
+unwrap. See Star in optics/profunctors.py.
 
 """
 
 from __future__   import annotations
 
+from typing       import Callable
+
+from ..identity   import Identity
+from ..functions  import Function, compose, const
+
 from .optic       import Optic, OpticIs
-from ..functions  import Function, const
+from .profunctors import Star
 
-__all__ = ['over', 'put']
+__all__ = ['Setter', 'puts', 'over', 'put']
 
 
-def over(opt: Optic, a_to_b):
-    "ATTN"
-    setter = opt.cast_as(OpticIs.SETTER)
-    return setter(Function(a_to_b))
+class Setter(Optic):
+    """An optic that supports modification but not reading."""
+    def __init__(self, f):
+        super().__init__(f, OpticIs.SETTER)
 
-def put(opt: Optic, val):
-    "ATTN"
-    return over(opt, const(val))
+
+def puts(f: Callable) -> Setter:
+    """Builds a Setter from an update function (a -> b) -> s -> t.
+
+    The given function shows how to update the entire structure
+    given a method for updating a specific focus.
+
+    puts : ((a -> b) -> s -> t) -> Setter s t a b
+
+    """
+    def the_setter(p):
+        g = compose(Identity.run, Star.run(p))   # a -> b
+        return Star(compose(Identity, f(g)), Identity)
+    return Setter(the_setter)
+
+
+def over(optic, f: Callable) -> Function:
+    """Modifies all foci with a given function, returning a function that updates the whole structure.
+
+    This works for Iso, Lens, Prism, AffineTraversal, Traversal, and Setter.
+
+    over : Optic -> (a -> b) -> s -> t
+
+    """
+    s = Star(compose(Identity, f), Identity)
+    return Function(compose(Identity.run, Star.run(optic(s))))
+
+
+def put(optic, b) -> Function:
+    """Replaces all foci with a constant value, returning a function that updates the whole structure.
+
+    put : Optic -> b -> s -> t
+
+    """
+    return over(optic, const(b))

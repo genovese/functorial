@@ -1,17 +1,20 @@
 __all__ = [
     'affine_fold',
+    'affine_traversal',
     'choice',
     'cochoice',
-    'costrong'
+    'costrong',
     'fold',
     'getter',
+    'iso',
     'lens',
     'optic',
     'prism',
+    're_',
     'review',
     'setter',
     'strong',
-    'costrong',
+    'traversal',
     'generics',
     'profunctors',
 ]

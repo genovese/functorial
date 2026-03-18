@@ -1,3 +1,5 @@
+"""Generic wrapper for all optics."""
+
 from __future__   import annotations
 
 import re
@@ -25,7 +27,17 @@ class OpticIs(StrEnum):
     FOLD = "Fold"
 
 class Optic(Function):
-    """ATTN:FILL in here
+    """Class representing the generic family of optics.
+
+    This is a wrapper for all the specific optic subtypes that
+    enables unified handling (e.g., composition, casting) and querying
+    (e.g., types or descriptive label).
+
+    Currently no index specification is included, though that is planned.
+    We also allow a generic data map to allow appropriate operations,
+    such as holding the Monoid or Applicative to use, but that is
+    currently inconsistently handled and needs to be fleshed out.
+    ATTN:TODOS
 
     """
     # ATTN: Add index type here as optional argument with NoIx = Unit
@@ -72,24 +84,204 @@ def _optic_desc(o_type: OpticIs, start_sentence=True) -> str:
         n = 'n'
     return f'{a}{n} {o_type.name}'
 
+#
+# Optic Composition: composed_optic_is(outer, inner) -> composed result type.
+#
+# Hasse diagram of the Optics subtype lattice with most specific at the top:
+#
+#                           Iso
+#                          /   \
+#                       Lens   Prism
+#                      /   \   /   \
+#                  Getter   AT    Review
+#                      \   / \
+#                      AF   Traversal
+#                        \ /        \
+#                        Fold      Setter
+#
+# where AT = AffineTraversal and AF = AffineFold.
+#
+# An edge in the lattice means ``can be used as.'' So, for instance,
+# a Traversal can be used as an AffineTraversal or a Lens or an Iso,
+# but a Lens cannot necessarily be used as a Traversal.
+#
+# This is encoded in the table _OPTIC_COMPOSITIONS below.
+# To reading the table: outer ∘ inner means "apply outer optic to get an
+# intermediate focus, then apply inner optic to reach the final focus".
+# The result is the least specific (i.e., most general) type consistent with
+# both optics.  Pairs not listed are incompatible and attempting such
+# compositions will raise an OpticTypeError.
+#
+
+_OPTIC_COMPOSITIONS: dict[tuple[OpticIs, OpticIs], OpticIs] = {
+    # ISO is the identity element of the composition lattice
+    (OpticIs.ISO, OpticIs.ISO):                      OpticIs.ISO,
+    (OpticIs.ISO, OpticIs.LENS):                     OpticIs.LENS,
+    (OpticIs.ISO, OpticIs.PRISM):                    OpticIs.PRISM,
+    (OpticIs.ISO, OpticIs.AFFINE_TRAVERSAL):         OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.ISO, OpticIs.TRAVERSAL):                OpticIs.TRAVERSAL,
+    (OpticIs.ISO, OpticIs.AFFINE_FOLD):              OpticIs.AFFINE_FOLD,
+    (OpticIs.ISO, OpticIs.FOLD):                     OpticIs.FOLD,
+    (OpticIs.ISO, OpticIs.GETTER):                   OpticIs.GETTER,
+    (OpticIs.ISO, OpticIs.REVIEW):                   OpticIs.REVIEW,
+    (OpticIs.ISO, OpticIs.SETTER):                   OpticIs.SETTER,
+
+    # LENS
+    (OpticIs.LENS, OpticIs.ISO):                     OpticIs.LENS,
+    (OpticIs.LENS, OpticIs.LENS):                    OpticIs.LENS,
+    (OpticIs.LENS, OpticIs.PRISM):                   OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.LENS, OpticIs.AFFINE_TRAVERSAL):        OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.LENS, OpticIs.TRAVERSAL):               OpticIs.TRAVERSAL,
+    (OpticIs.LENS, OpticIs.AFFINE_FOLD):             OpticIs.AFFINE_FOLD,
+    (OpticIs.LENS, OpticIs.FOLD):                    OpticIs.FOLD,
+    (OpticIs.LENS, OpticIs.GETTER):                  OpticIs.GETTER,
+    (OpticIs.LENS, OpticIs.SETTER):                  OpticIs.SETTER,
+
+    # PRISM
+    (OpticIs.PRISM, OpticIs.ISO):                    OpticIs.PRISM,
+    (OpticIs.PRISM, OpticIs.LENS):                   OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.PRISM, OpticIs.PRISM):                  OpticIs.PRISM,
+    (OpticIs.PRISM, OpticIs.AFFINE_TRAVERSAL):       OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.PRISM, OpticIs.TRAVERSAL):              OpticIs.TRAVERSAL,
+    (OpticIs.PRISM, OpticIs.AFFINE_FOLD):            OpticIs.AFFINE_FOLD,
+    (OpticIs.PRISM, OpticIs.FOLD):                   OpticIs.FOLD,
+    (OpticIs.PRISM, OpticIs.GETTER):                 OpticIs.AFFINE_FOLD,
+    (OpticIs.PRISM, OpticIs.REVIEW):                 OpticIs.REVIEW,
+    (OpticIs.PRISM, OpticIs.SETTER):                 OpticIs.SETTER,
+
+    # AFFINE_TRAVERSAL
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.ISO):              OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.LENS):             OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.PRISM):            OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.AFFINE_TRAVERSAL): OpticIs.AFFINE_TRAVERSAL,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL):        OpticIs.TRAVERSAL,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.AFFINE_FOLD):      OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.FOLD):             OpticIs.FOLD,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.GETTER):           OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_TRAVERSAL, OpticIs.SETTER):           OpticIs.SETTER,
+
+    # TRAVERSAL
+    (OpticIs.TRAVERSAL, OpticIs.ISO):                OpticIs.TRAVERSAL,
+    (OpticIs.TRAVERSAL, OpticIs.LENS):               OpticIs.TRAVERSAL,
+    (OpticIs.TRAVERSAL, OpticIs.PRISM):              OpticIs.TRAVERSAL,
+    (OpticIs.TRAVERSAL, OpticIs.AFFINE_TRAVERSAL):   OpticIs.TRAVERSAL,
+    (OpticIs.TRAVERSAL, OpticIs.TRAVERSAL):          OpticIs.TRAVERSAL,
+    (OpticIs.TRAVERSAL, OpticIs.AFFINE_FOLD):        OpticIs.FOLD,
+    (OpticIs.TRAVERSAL, OpticIs.FOLD):               OpticIs.FOLD,
+    (OpticIs.TRAVERSAL, OpticIs.GETTER):             OpticIs.FOLD,
+    (OpticIs.TRAVERSAL, OpticIs.SETTER):             OpticIs.SETTER,
+
+    # GETTER (read-only, always has exactly one focus)
+    (OpticIs.GETTER, OpticIs.ISO):                   OpticIs.GETTER,
+    (OpticIs.GETTER, OpticIs.LENS):                  OpticIs.GETTER,
+    (OpticIs.GETTER, OpticIs.PRISM):                 OpticIs.AFFINE_FOLD,
+    (OpticIs.GETTER, OpticIs.AFFINE_TRAVERSAL):      OpticIs.AFFINE_FOLD,
+    (OpticIs.GETTER, OpticIs.TRAVERSAL):             OpticIs.FOLD,
+    (OpticIs.GETTER, OpticIs.GETTER):                OpticIs.GETTER,
+    (OpticIs.GETTER, OpticIs.AFFINE_FOLD):           OpticIs.AFFINE_FOLD,
+    (OpticIs.GETTER, OpticIs.FOLD):                  OpticIs.FOLD,
+
+    # AFFINE_FOLD (read-only, zero or one focus)
+    (OpticIs.AFFINE_FOLD, OpticIs.ISO):              OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.LENS):             OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.PRISM):            OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.AFFINE_TRAVERSAL): OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.TRAVERSAL):        OpticIs.FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.GETTER):           OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.AFFINE_FOLD):      OpticIs.AFFINE_FOLD,
+    (OpticIs.AFFINE_FOLD, OpticIs.FOLD):             OpticIs.FOLD,
+
+    # FOLD (read-only, zero or more foci)
+    (OpticIs.FOLD, OpticIs.ISO):                     OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.LENS):                    OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.PRISM):                   OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.AFFINE_TRAVERSAL):        OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.TRAVERSAL):               OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.GETTER):                  OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.AFFINE_FOLD):             OpticIs.FOLD,
+    (OpticIs.FOLD, OpticIs.FOLD):                    OpticIs.FOLD,
+
+    # REVIEW (write-only constructor; only composes with optics that have review)
+    (OpticIs.REVIEW, OpticIs.ISO):                   OpticIs.REVIEW,
+    (OpticIs.REVIEW, OpticIs.PRISM):                 OpticIs.REVIEW,
+    (OpticIs.REVIEW, OpticIs.REVIEW):                OpticIs.REVIEW,
+
+    # SETTER (write-only modifier)
+    (OpticIs.SETTER, OpticIs.ISO):                   OpticIs.SETTER,
+    (OpticIs.SETTER, OpticIs.LENS):                  OpticIs.SETTER,
+    (OpticIs.SETTER, OpticIs.PRISM):                 OpticIs.SETTER,
+    (OpticIs.SETTER, OpticIs.AFFINE_TRAVERSAL):      OpticIs.SETTER,
+    (OpticIs.SETTER, OpticIs.TRAVERSAL):             OpticIs.SETTER,
+    (OpticIs.SETTER, OpticIs.SETTER):                OpticIs.SETTER,
+}
+
 def composed_optic_is(opt1: OpticIs, opt2: OpticIs) -> OpticIs:
-    "Returns the type of a composed optics with given constituent types."
-    # ATTN: This is just an example, need more systematic approach
-    if opt1 == OpticIs.LENS and opt2 == OpticIs.PRISM:
-        return OpticIs.ISO
+    """Returns the type of the optic formed by composing opt1 (outer) with opt2 (inner).
 
-    return opt1  # ATTN: THIS IS WRONG
-
-def cast_optic_is(opt_from: OpticIs, opt_to: OpticIs) -> OpticIs:
-    """Checks compatibility of optic types, raising an error if invalid.
-
-    Returns the target type, which will then be valid.
+    Raises OpticTypeError for incompatible combinations (e.g. Getter ∘ Setter).
 
     """
-    # ATTN: This is just an example, need more systematic approach
-    if opt_to == OpticIs.LENS and opt_from == OpticIs.TRAVERSAL:
-        # ATTN: OpticTypeError to be caught by operation to give
-        # a better error message
-        raise OpticTypeError('cannot convert a traversal to a lens')
+    result = _OPTIC_COMPOSITIONS.get((opt1, opt2))
+    if result is None:
+        raise OpticTypeError(
+            f'Cannot compose {_optic_desc(opt1, False)} (outer) with {_optic_desc(opt2, False)} (inner): '
+            f'incompatible optic types'
+        )
+    return result
 
+
+#
+# Optic Casting:  cast_optic_is(from, to) -> valid cast type
+#
+# This is encoded in the subtype table _OPTIC_SUBTYPES below.
+# _OPTIC_SUBTYPES[T] is the set of types that T can be cast to.
+#
+# A type T is a subtype of S when T is more specific (T can do
+# everything S can). See the Hasse diagram above.
+#
+
+_OPTIC_SUBTYPES: dict[OpticIs, frozenset[OpticIs]] = {
+    OpticIs.ISO: frozenset({
+        OpticIs.ISO, OpticIs.LENS, OpticIs.PRISM,
+        OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.GETTER, OpticIs.AFFINE_FOLD, OpticIs.FOLD,
+        OpticIs.REVIEW, OpticIs.SETTER,
+    }),
+    OpticIs.LENS: frozenset({
+        OpticIs.LENS, OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.GETTER, OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.PRISM: frozenset({
+        OpticIs.PRISM, OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.REVIEW, OpticIs.SETTER,
+    }),
+    OpticIs.AFFINE_TRAVERSAL: frozenset({
+        OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.TRAVERSAL: frozenset({
+        OpticIs.TRAVERSAL, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.GETTER: frozenset({
+        OpticIs.GETTER, OpticIs.AFFINE_FOLD, OpticIs.FOLD,
+    }),
+    OpticIs.AFFINE_FOLD: frozenset({
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD,
+    }),
+    OpticIs.FOLD:   frozenset({OpticIs.FOLD}),
+    OpticIs.REVIEW: frozenset({OpticIs.REVIEW}),
+    OpticIs.SETTER: frozenset({OpticIs.SETTER}),
+}
+
+def cast_optic_is(opt_from: OpticIs, opt_to: OpticIs) -> OpticIs:
+    """Checks that opt_from can be used as opt_to, or raises OpticTypeError if not.
+
+    A cast is valid when opt_from is a subtype of opt_to — i.e., when
+    opt_from is at least as specific as opt_to in the optic lattice.
+
+    Returns opt_to on success.
+
+    """
+    if opt_to not in _OPTIC_SUBTYPES.get(opt_from, frozenset()):
+        raise OpticTypeError(f'Cannot cast {_optic_desc(opt_from, False)} as {_optic_desc(opt_to, False)}')
     return opt_to
