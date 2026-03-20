@@ -100,7 +100,7 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
         pure = Const(self._monoid.munit, self._monoid).pure  # Could use as is, but use the function
         return Forget(compose(runConst, lambda s: f(pure, g, s)), self._monoid)
 
-class ForgetM[R, A](Strong, Cochoice, Choice):
+class ForgetM[R, A](Strong, Cochoice, Choice, Bicofunctor):
     """A profunctor representing a mapping to a fixed type.
 
     The second type argument is a phantom type (i.e., ignored).
@@ -144,6 +144,26 @@ class ForgetM[R, A](Strong, Cochoice, Choice):
 
     def bicomap[B](self, f: Callable[[B], A], _g: Callable) -> ForgetM[R, B]:
         return ForgetM(compose(self._a_to_mr, f))
+
+    def visit(self, f):
+        """Converts a VL affine traversal into a ForgetM profunctor.
+
+        f : Functor g => (r -> g r) -> (a -> g b) -> s -> g t
+
+        The focus function must be wrapped so that the .map() call inside
+        the visit function (which rebuilds the structure) becomes a no-op.
+        We use a local Const-like wrapper for this: its .map() ignores the
+        function and returns itself, so only the extracted Maybe value matters.
+        """
+        class _ConstM:
+            __slots__ = ('_v',)
+            def __init__(self, v):      self._v = v
+            def map(self, _):           return self
+
+        fn = self._a_to_mr
+        g = lambda a: _ConstM(fn(a))
+        point = lambda _: _ConstM(Nothing())
+        return ForgetM(lambda s: f(point, g, s)._v)
 
 #
 # Star is a profunctor that lifts an arrow a -> f b into a profunctor.
@@ -228,12 +248,14 @@ class Star[A, B](Strong, Choice):
         return Star(g(self._fn), self._functor)
 
     def visit(self, g):
-        """Converts a VL traversal with pure constructor into a profunctor.
+        """Converts a VL affine traversal into a Star profunctor.
 
-        g : Applicative f => (forall r. r -> f r) -> (a -> f b) -> (s -> f t)
+        g : Applicative f => (forall r. r -> f r) -> (a -> f b) -> s -> f t
 
+        The visit function g takes point (pure for the functor), the focus
+        function, and the structure s — all three arguments at once.
         """
-        return Star(g(self._functor.pure, self._fn), self._functor)
+        return Star(lambda s: g(self._functor.pure, self._fn, s), self._functor)
 
 
 #

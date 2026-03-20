@@ -22,10 +22,10 @@ from .profunctors import Star
 __all__ = ['Setter', 'puts', 'over', 'put']
 
 
-class Setter(Optic):
+class Setter(Optic, optic_is=OpticIs.SETTER):
     """An optic that supports modification but not reading."""
-    def __init__(self, f):
-        super().__init__(f, OpticIs.SETTER)
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.SETTER)
 
 
 def puts(f: Callable) -> Setter:

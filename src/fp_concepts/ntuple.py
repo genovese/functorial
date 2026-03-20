@@ -18,7 +18,7 @@ from .functor     import pymap
 from .list        import List, append_
 from .traversable import Traversable
 
-__all__ = ['NTuple',]
+__all__ = ['NTuple', 'ntuple', 'ntuple_',]
 
 
 class NTupleBase[A](tuple, Applicative, Traversable):
@@ -37,11 +37,11 @@ class NTupleBase[A](tuple, Applicative, Traversable):
         if len(args) == 0:
             mesg = f'Ntuple({cls._size}) requires {cls._size} elements.'
             raise TypeError(mesg)
-        input = list(args[0])  # Allow iterators/generators/iterables as input
-        if len(input) != cls._size:
-            mesg = f'Ntuple({cls._size}) initialized with {len(input)} != {cls._size} elements.'
+        comps = list(args[0])  # Components; allow iterators/generators/iterables as input
+        if len(comps) != cls._size:
+            mesg = f'Ntuple({cls._size}) initialized with {len(comps)} != {cls._size} elements.'
             raise TypeError(mesg)
-        return super().__new__(cls, input, *args[1:], **kwds)
+        return super().__new__(cls, comps, *args[1:], **kwds)
 
     def __getitem__(self, key):
         items = super().__getitem__(key)
@@ -78,6 +78,18 @@ class NTupleBase[A](tuple, Applicative, Traversable):
 ntuple_registry: dict[int, type[NTupleBase]] = {}
 
 def NTuple(n: int, *args):
+    """Constructs either a specific NTuple class or converts a tuple to such a class.
+
+    n is the length of the tuple and must be positive.
+
+    If no other argument is supplied, returns the corresponding size-n NTuple class.
+    If an argument is supplied, it is converted to such an NTuple. It is assumed
+    to have the right type, length, and be monomorphic.
+
+    Note that: NTuple(4).of(1, 2, 3, 4) is a recommended approach to construction.
+    This checks the length.
+
+    """
     if n <= 0:
         raise TypeError('NTuple requires a positive length')
     if n in ntuple_registry:
@@ -91,3 +103,29 @@ def NTuple(n: int, *args):
     if len(args) == 0:
         return cls
     return cls(args[0])
+
+def ntuple(tup: tuple):
+    """Converts a monomorphic tuple to an NTuple class of the right length.
+
+    This is a shortcut for NTuple(n).of(a, b, c, ...) but takes a tuple
+    rather than individual arguments. See ntuple_ for the latter.
+
+    The types of the components are not checked. The input tuple
+    must have positive length.
+
+    Returns the input wrapped as an NTuple.
+
+    """
+    return NTuple(len(tup)).of(*tup)
+
+def ntuple_(*tup):
+    """Wraps its arguments in an NTuple of the right length.
+
+    This is a shortcut for NTuple(n).of(a, b, c, ...). The types of
+    the components are not checked. An error is raised if no
+    arguments are given.
+
+    Returns the input wrapped as an NTuple.
+
+    """
+    return NTuple(len(tup)).of(*tup)

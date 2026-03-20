@@ -279,6 +279,8 @@ def tree_examples():
     x = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
     y = x.map(lambda k: k ** 2)
 
+    # traverse(lambda xi: IO(lambda: as_io(print("(" + str(xi) + ")"), xi + 1000)), x, IO)
+
     return [t, u, v, w, x, y]
 
 def test_trees():
@@ -433,7 +435,7 @@ def optics_examples():
         return len(ma) == len(mb) and all(a == b for a, b in zip(ma, mb))
 
     return [
-        # This is still just vl optics
+        # Lens: at, t_n, view, put
         (collect(at(1))(List.of(1, 2, 3, 4)), [2], eq),
         (view(at(1))(List.of(1, 2, 3, 4)), 2, None),
         (view(at(0))(List.of(1, 2, 3, 4)), 1, None),
@@ -443,6 +445,92 @@ def optics_examples():
         (List.of(0, 1, 2, 3, 4, 5) >> put(at(0, slice(3, None)), [10, 20, 30]), [10, 1, 2, 20, 30, 5], eq),
         (view(t_3)((1, 2, 3, 4, 5)), 4, None),
         (view(t_1 @ t_0 @ t_3)([1, [[1, 2, 3, 4, 5], 6, 7]]), 4, None),
+
+        # Lens: over, view_with, alongside
+        (over(t_0, inc)((3, 4)), (4, 4), None),
+        (over(at(1), inc)([1, 9, 3, 4]), [1, 10, 3, 4], eq),
+        (view_with(t_0, inc)((3, 4)), 4, None),
+        (view(alongside(t_0, t_1))(((1, 2), (3, 4, 5))), (1, 4), None),
+        (put(alongside(t_0, t_1), (10, 40))(((1, 2), (3, 4, 5))), ((10, 2), (3, 40, 5)), None),
+
+        # Getter
+        (view(getter(lambda p: p[0] + p[1]))((3, 4)), 7, None),
+
+        # Setter
+        (List.of(1, 2, 3) >> over(each, mulBy(10)), List.of(10, 20, 30), eq),
+        (ntuple_(1, 2, 3) >> over(each, mulBy(10)), (10, 20, 30), eq),
+
+        # Prism: left, right, some, nothing, only
+        (preview(right)(Right(10)), Some(10), None),
+        (preview(right)(Left(10)), Nothing(), None),
+        (review(right)(10), Right(10), None),
+        (preview(left)(Left('err')), Some('err'), None),
+        (preview(some)(Some(42)), Some(42), None),
+        (preview(some)(Nothing()), Nothing(), None),
+        (review(some)(42), Some(42), None),
+        (has(some, Some(10)), True, None),
+        (has(some, Nothing()), False, None),
+        (has(nothing, Nothing()), True, None),
+        (has(only(5), 5), True, None),
+        (has(only(5), 6), False, None),
+
+        # AffineTraversal: ix
+        (preview(ix(1))([10, 20, 30]), Some(20), None),
+        (preview(ix(5))([10, 20, 30]), Nothing(), None),
+        (over(ix(0), inc)([1, 2, 3]), [2, 2, 3], eq),
+
+        # AffineFold: filtered, has
+        (preview(filtered(lambda x: x > 3))(5), Some(5), None),
+        (preview(filtered(lambda x: x > 3))(2), Nothing(), None),
+        (has(filtered(lambda x: x > 3), 5), True, None),
+        (has(filtered(lambda x: x > 3), 2), False, None),
+
+        # Traversal: both, each
+        (over(both, inc)((3, 4)), (4, 5), None),
+        (sum_of(each)(List.of(1, 2, 3, 4, 5)), 15, None),
+        (count_of(each)(List.of(1, 2, 3)), 3, None),
+
+        # Fold: folded, sum_of, count_of
+        (sum_of(folded)(List.of(1, 2, 3, 4, 5)), 15, None),
+        (count_of(folded)(List.of(1, 2, 3)), 3, None),
+        (collect(folded)(List.of(1, 2, 3)), [1, 2, 3], eq),
+
+        # Iso: negated, swapped, flipped, non
+        (view(negated)(5), -5, None),
+        (view(negated)(-3), 3, None),
+        (view(swapped)((1, 2)), (2, 1), None),
+        (view(from_(swapped))((1, 2)), (2, 1), None),
+        (view(flipped)(Left(1)), Right(1), None),
+        (view(flipped)(Right('x')), Left('x'), None),
+        (view(non(0))(Some(42)), 42, None),
+        (view(non(0))(Nothing()), 0, None),
+
+        # Optic composition: result type dispatch
+        (isinstance(at(0) @ at(1), Lens), True, None),
+        (isinstance(at(0) @ right, AffineTraversal), True, None),
+        (isinstance(folded @ each, Fold), True, None),
+        (isinstance(getter(len) @ folded, Fold), True, None),
+
+        # Optic composition: nested structures
+        (preview(t_0 @ right)((Right(10), 2)), Some(10), None),
+        (preview(t_0 @ right)((Left(5),  2)), Nothing(), None),
+        (view(at(0) @ at(1))([[10, 20], [30, 40]]), 20, None),
+        (over(at(0) @ at(1), inc)([[10, 20], [30, 40]]), [[10, 21], [30, 40]], eq),
+        (collect(each @ some)(List.of(Some(1), Nothing(), Some(3))), [1, 3], eq),
+        (List.of((1, 2), (2, 3), (3, 4), (4, 5), (5, 6)) >> sum_of(folded @ t_1), 20, None),
+        (sum_of(folded @ each)(List.of(List.of(1, 2), List.of(3, 4))), 10, None),
+        (collect(folded @ filtered(lambda x: x % 2 == 0))(List.of(1, 2, 3, 4, 5)), [2, 4], eq),
+        (preview(ix(0) @ some)([Some(42), Nothing()]), Some(42), None),
+        (preview(ix(0) @ some)([Nothing(), Some(1)]), Nothing(), None),
+
+        # RoseTree with optics
+        (sum_of(each)(RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])), 55, None),
+        (count_of(each)(RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])), 10, None),
+        (collect(each)(RoseTree([1, [2], [3]])), [1, 2, 3], eq),
+        (collect(each @ filtered(lambda x: x > 5))(
+            RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])), [6, 7, 8, 9, 10], eq),
+        (over(each, lambda x: x * 2)(RoseTree([1, [2], [3]])).to_sexp(),
+         RoseTree([2, [4], [6]]).to_sexp(), None),
     ]
 
 def test_optics():

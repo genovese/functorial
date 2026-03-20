@@ -15,6 +15,7 @@ from typing        import Callable
 
 from ..pair        import Pair
 from ..functions   import compose
+from ..traversable import traverse_
 
 from .generics     import wander_
 from .optic        import Optic, OpticIs
@@ -25,16 +26,17 @@ __all__ = [
     'Traversal',
     'traversal',
     'both',
+    'each',
     'traverse_of',
     'over',
     'put',
 ]
 
 
-class Traversal(Optic):
+class Traversal(Optic, optic_is=OpticIs.TRAVERSAL):
     """An optic focusing on zero or more elements."""
-    def __init__(self, f):
-        super().__init__(f, OpticIs.TRAVERSAL)
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.TRAVERSAL)
 
 
 def traversal(f: Callable) -> Traversal:
@@ -66,3 +68,6 @@ def _both_vl(f):
 
 both = traversal(_both_vl)
 """Traversal over both elements of a 2-tuple or Pair."""
+
+each = traversal(traverse_)
+"""Traversal over all elements of any Traversable container."""

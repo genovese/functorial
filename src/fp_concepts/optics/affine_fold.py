@@ -36,10 +36,10 @@ __all__ = [
 ]
 
 
-class AffineFold(Optic):
+class AffineFold(Optic, optic_is=OpticIs.AFFINE_FOLD):
     """A read-only optic extracting at most one element."""
-    def __init__(self, f):
-        super().__init__(f, OpticIs.AFFINE_FOLD)
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.AFFINE_FOLD)
 
 
 def afold(f: Callable) -> AffineFold:

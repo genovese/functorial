@@ -27,55 +27,66 @@ class OpticIs(StrEnum):
     FOLD = "Fold"
 
 class Optic(Function):
-    """Class representing the generic family of optics.
+    """An optic is a first-class profunctor transformer p a b -> p s t.
 
-    This is a wrapper for all the specific optic subtypes that
-    enables unified handling (e.g., composition, casting) and querying
-    (e.g., types or descriptive label).
+    The _type field tracks which optic in the subtype lattice this is,
+    allowing composition and casting to be checked and dispatched correctly.
+
+    _class_map maps each OpticIs value to its corresponding subclass so
+    that composition returns the correct Python type. Each subclass
+    registers itself automatically via __init_subclass__ when its module
+    is imported, using the optic_is keyword argument in the class header.
 
     Currently no index specification is included, though that is planned.
     We also allow a generic data map to allow appropriate operations,
     such as holding the Monoid or Applicative to use, but that is
     currently inconsistently handled and needs to be fleshed out.
     ATTN:TODOS
-
     """
-    # ATTN: Add index type here as optional argument with NoIx = Unit
+    _class_map: dict = {}
+
+    def __init_subclass__(cls, optic_is=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if optic_is is not None:
+            Optic._class_map[optic_is] = cls
+
     def __init__(self, f, o_type: OpticIs, **data):
         self._type = o_type
-        self._data = data    # ATTN: needed? how used? e.g., Monoid to use etc.
+        self._data = data
         super().__init__(f)
 
     def __str__(self):
         return f'{_optic_desc(self._type)} Optic {repr(self)}'
 
-    # ATTN: add data accessor, e.g., to wrap with the right Monoid
-
     def __matmul__(self, other):
-        "Composes two optics."
+        "Composes two optics, returning the correct subtype."
+        # ATTN: We do not yet handle the **data argument generally.
+        # This needs to be unified across all optics, assuming
+        # that it even proves useful. The idea is to allow
+        # extra specification info that cannot be inferred in Python,
+        # like a Monoid or Applicative to use.
         if isinstance(other, Optic):
             opt_type = composed_optic_is(self._type, other._type)
             opt_data = self._data | other._data
+            cls = Optic._class_map.get(opt_type, Optic)
+            return cls(compose(self._fn, other._fn), opt_type, **opt_data)
 
-            # ATTN: Need to standardize the args to the non-trivial optic classes
-            # We will have them take **data in second argument but not a type
-            # and instead of .__class__ get the class from the composition
-            # return self.__class__(compose(self._fn, other._fn), opt_type, **opt_data)
-            return self.__class__(compose(self._fn, other._fn), opt_type)
-
-        if callable(other):  # Viable case?
-            return self.__class__(compose(self._fn, other), self._type, **self._data)
+        if callable(other):
+            cls = Optic._class_map.get(self._type, Optic)
+            return cls(compose(self._fn, other), self._type, **self._data)
 
         return NotImplemented
 
     def __rmatmul__(self, other):
-        "Composes two optics."
-        if callable(other):  # Viable case?
-            return self.__class__(compose(other, self._fn), self._type, **self._data)
+        "Composes a plain callable on the left with this optic."
+        if callable(other):
+            cls = Optic._class_map.get(self._type, Optic)
+            return cls(compose(other, self._fn), self._type, **self._data)
         return NotImplemented
 
     def cast_as(self, o_type: OpticIs):
-        return Optic(self._fn, cast_optic_is(self._type, o_type), **self._data)
+        cls = Optic._class_map.get(o_type, Optic)
+        return cls(self._fn, cast_optic_is(self._type, o_type), **self._data)
 
 def _optic_desc(o_type: OpticIs, start_sentence=True) -> str:
     a = 'A' if start_sentence else 'a'

@@ -24,10 +24,10 @@ from .profunctors  import Forget
 __all__ = ['Getter', 'view', 'view_with', 'getter']
 
 
-class Getter(Optic):
+class Getter(Optic, optic_is=OpticIs.GETTER):
     """A read-only optic extracting exactly one element."""
-    def __init__(self, f):
-        super().__init__(f, OpticIs.GETTER)
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.GETTER)
 
 
 idF: Forget = Forget(identity)

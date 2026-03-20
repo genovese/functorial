@@ -40,9 +40,9 @@ __all__ = [
     'right_fold_of',
 ]
 
-class Fold(Optic):  # ATTN:Placeholder
-    def __init__(self, f):
-        super().__init__(f, OpticIs.FOLD)
+class Fold(Optic, optic_is=OpticIs.FOLD):  # ATTN:Placeholder
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.FOLD)
 
 # fold_vl : Applicative f => (a -> f b) -> (s -> f t) -> Optic s t a b
 def fold_vl(f):

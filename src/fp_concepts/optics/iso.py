@@ -22,6 +22,7 @@ from __future__    import annotations
 
 from typing        import Callable
 
+from ..either      import Left, Right
 from ..profunctor  import dilift
 from ..functions   import Function, identity
 from ..maybe       import maybe, Nothing, Some
@@ -36,13 +37,16 @@ __all__ = [
     'involuted',
     'non',
     'coerced',
+    'negated',
+    'swapped',
+    'flipped',
 ]
 
 
-class Iso(Optic):
+class Iso(Optic, optic_is=OpticIs.ISO):
     """An optic representing an invertible transformation."""
-    def __init__(self, f):
-        super().__init__(f, OpticIs.ISO)
+    def __init__(self, f, opt_type=None):
+        super().__init__(f, opt_type if opt_type is not None else OpticIs.ISO)
 
 
 def iso(sa: Callable, bt: Callable) -> Iso:
@@ -107,3 +111,19 @@ def coerced(forward: Callable, backward: Callable) -> Iso:
 
     """
     return iso(forward, backward)
+
+
+negated: Iso = involuted(lambda x: -x)
+"""Iso negating a number; self-inverse since -(-x) = x."""
+
+swapped: Iso = involuted(lambda p: (p[1], p[0]))
+"""Iso swapping the two components of a pair; self-inverse."""
+
+
+def _flip_either(e):
+    match e:
+        case Left(a):  return Right(a)
+        case Right(b): return Left(b)
+
+flipped: Iso = involuted(_flip_either)
+"""Iso swapping Left and Right in an Either; self-inverse."""
