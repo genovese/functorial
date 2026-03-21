@@ -379,10 +379,10 @@ def combined_examples():
     t = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])
 
     return [
-        (foldMap(identity, t, monoids.Sum), 55, None),
-        (foldMap(identity, t, monoids.Product), 3628800, None),
-        (foldMap(identity, t, Collect), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], None),
-        (foldMap(lambda a: Pair(a, a), t, monoids.mtuple(monoids.Sum, monoids.Product)),
+        (fold_map_default(identity, t, monoids.Sum), 55, None),
+        (fold_map_default(identity, t, monoids.Product), 3628800, None),
+        (fold_map_default(identity, t, Collect), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], None),
+        (fold_map_default(lambda a: Pair(a, a), t, monoids.mtuple(monoids.Sum, monoids.Product)),
          (55, 3628800), None),
     ]
 

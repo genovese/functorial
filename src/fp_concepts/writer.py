@@ -1,9 +1,8 @@
-#
-# The Writer Monad
-#
-# newtype Writer w a = Writer { runWriter : Pair a w }
-#
-#
+"""The Writer Monad
+
+    newtype Writer w a = Writer { run_writer : Pair a w }
+
+"""
 from __future__      import annotations
 
 from collections.abc import Callable
@@ -14,7 +13,7 @@ from .monoids        import Monoid, Free
 from .pair           import Pair
 from .functions      import compose
 
-__all__ = ['Writer', 'runWriter', 'execWriter', 'tell']
+__all__ = ['Writer', 'run_writer', 'exec_writer', 'tell']
 
 class WriterBase[A, W](Monad):
     _monoid = Free
@@ -104,16 +103,17 @@ def Writer[A, W](monoid: Monoid = Free, value: Maybe[A] = Nothing(), annotation:
     if not value:
         return w_class
 
+    # Note: We use None here as the default, though it is not necessarily of type A
     return w_class(value.get(None), annotation.get(w_class._monoid.munit))
 
 #
 # Writer Utilties (esp useful in do blocks)
 #
 
-def runWriter[W, A](w: WriterBase[W, A]) -> Pair[A, W]:
+def run_writer[W, A](w: WriterBase[W, A]) -> Pair[A, W]:
     return w.run
 
-def execWriter[W, A](w: WriterBase[W, A]) -> W:
+def exec_writer[W, A](w: WriterBase[W, A]) -> W:
     return w.run[1]
 
 def tell(w, which=WriterBase):

@@ -1,10 +1,10 @@
 #
 # trait Foldable (f : Type -> Type) where
-#     foldM : Monoid m => (a -> m) -> f a -> m
+#     fold_map : Monoid m => (a -> m) -> f a -> m
 #     fold  : (a -> b -> a) -> a -> f b -> a
 #
 # trait IndexedFoldable (f : Type -> Type) where
-#     ifoldM : Monoid m => (i -> a -> m) -> f a -> m
+#     ifold_map : Monoid m => (i -> a -> m) -> f a -> m
 #     ifold  : (i -> a -> b -> a) -> a -> f b -> a
 #
 # ruff: noqa: N802
@@ -21,13 +21,13 @@ from .maybe          import Maybe, Some, Nothing
 from .monoids        import Conjunction, Disjunction, Endo, First, Monoid
 
 
-__all__ = ['Foldable', 'IndexedFoldable', 'foldM', 'fold', 'ifoldM', 'ifold',]
+__all__ = ['Foldable', 'IndexedFoldable', 'fold_map', 'fold', 'ifold_map', 'ifold',]
 
 
 class Foldable[A](Protocol):
     @abstractmethod
-    def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
-        "foldMap : Monoid m => Self -> (a -> m) -> m"
+    def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+        "fold_map : Monoid m => Self -> (a -> m) -> m"
         ...
 
     @abstractmethod
@@ -35,13 +35,13 @@ class Foldable[A](Protocol):
         "Standard left fold. Note argument order in folding function."
         ...
 
-# ATTN: should foldRight be part of the protocol, thinking not
+# ATTN: should fold_right be part of the protocol, thinking not
 
 # ATTN: This is a useful convention with the Protocol classes
 # Have the basic protocol X and a class X_ that inherits from X
 # but also provides default implementations of other methods.
 #
-# Here, we need foldRight, traverse_, and other useful things that
+# Here, we need fold_right, traverse_, and other useful things that
 # follow from baseline. Instances can override these as needed.
 #
 class Foldable_[A](Foldable[A]):
@@ -50,38 +50,38 @@ class Foldable_[A](Foldable[A]):
     Foldable is a protocol, prefer this if inheriting directly.
     """
     @abstractmethod
-    def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+    def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         ...
 
     @abstractmethod
     def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
         ...
 
-    def foldRight[B](self, f: Callable[[A, B], B], initial: B) -> B:
+    def fold_right[B](self, f: Callable[[A, B], B], initial: B) -> B:
         "Right fold: ATTN"
         def f_partial(a: A) -> Callable[[B], B]:
             return lambda b: f(a, b)
 
-        f_prime = self.foldM(f_partial, Endo)
+        f_prime = self.fold_map(f_partial, Endo)
         return f_prime(initial)
 
     # traverse_ : (a -> f b) -> t a -> f ()
     def traverse_(self, f: Callable[[A], Applicative], effect: type[Applicative] = IdentityA) -> Applicative:
         def act(x: A, eff: Applicative):
             return ap_second(f(x), eff)  # f x *> eff
-        return self.foldRight(act, effect.pure(()))
+        return self.fold_right(act, effect.pure(()))
 
     def find(self, pred: Callable[[A], bool]) -> Maybe[A]:
         def _find_it(x: A):
             return Some(x) if pred(x) else Nothing()
 
-        return self.foldM(_find_it, First)
+        return self.fold_map(_find_it, First)
 
     def any(self, pred: Callable[[A], bool]) -> bool:
-        return self.foldM(pred, Disjunction)
+        return self.fold_map(pred, Disjunction)
 
     def all(self, pred: Callable[[A], bool]) -> bool:
-        return self.foldM(pred, Conjunction)
+        return self.fold_map(pred, Conjunction)
 
     def concat_map[B](self, f: Callable[[A], list[B]]) -> list[B]:
         def _extend(acc: list[B], a: A) -> list[B]:
@@ -92,7 +92,7 @@ class Foldable_[A](Foldable[A]):
 
 class IndexedFoldable[I, A](Protocol):
     @abstractmethod
-    def ifoldM[M](self, f: Callable[[I, A], M], monoid: Monoid) -> M:
+    def ifold_map[M](self, f: Callable[[I, A], M], monoid: Monoid) -> M:
         ...
 
     @abstractmethod
@@ -104,7 +104,7 @@ class IndexedFoldable[I, A](Protocol):
 # Generic Functions
 #
 
-def foldM[A, M](f: Callable[[A], M], xs: Foldable[A], monoid: Monoid) -> M:
+def fold_map[A, M](f: Callable[[A], M], xs: Foldable[A], monoid: Monoid) -> M:
     """Fold over a structure, converting each component to a monoid and combining.
 
     This will typically operate over Functors, but it is fine to define these
@@ -120,7 +120,7 @@ def foldM[A, M](f: Callable[[A], M], xs: Foldable[A], monoid: Monoid) -> M:
     structure xs is empty.
 
     """
-    return xs.foldM(f, monoid)
+    return xs.fold_map(f, monoid)
 
 def fold[A, B](f: Callable[[B, A], B], initial: B, xs: Foldable[A]) -> B:
     """Fold over a structure accumulating a result from an initial value.
@@ -142,7 +142,7 @@ def fold[A, B](f: Callable[[B, A], B], initial: B, xs: Foldable[A]) -> B:
     """
     return xs.fold(f, initial)
 
-def ifoldM[I, A, M](f: Callable[[I, A], M], xs: IndexedFoldable[I, A], monoid: Monoid) -> M:
+def ifold_map[I, A, M](f: Callable[[I, A], M], xs: IndexedFoldable[I, A], monoid: Monoid) -> M:
     """Fold over an indexed structure, converting each component to a monoid and combining.
 
     The indexes are intrinsic to the structure and are typically obtained by
@@ -162,7 +162,7 @@ def ifoldM[I, A, M](f: Callable[[I, A], M], xs: IndexedFoldable[I, A], monoid: M
     structure xs is empty.
 
     """
-    return xs.ifoldM(f, monoid)
+    return xs.ifold_map(f, monoid)
 
 
 def ifold[I, A, B](f: Callable[[I, B, A], B], xs: IndexedFoldable[I, A], initial: B) -> B:

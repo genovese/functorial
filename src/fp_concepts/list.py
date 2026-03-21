@@ -170,7 +170,7 @@ class List[A](list, Monad, Traversable):
 
     # Foldable and IndexedFoldable Instances
 
-    def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+    def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         r = monoid.munit
         for elt in self:
             m = f(elt)
@@ -183,7 +183,7 @@ class List[A](list, Monad, Traversable):
             acc = f(acc, elt)
         return acc
 
-    def ifoldM[M](self, f: Callable[[int, A], M], monoid: Monoid) -> M:
+    def ifold_map[M](self, f: Callable[[int, A], M], monoid: Monoid) -> M:
         r = monoid.munit
         for index, elt in enumerate(self):
             m = f(index, elt)
@@ -196,7 +196,7 @@ class List[A](list, Monad, Traversable):
             acc = f(index, acc, elt)
         return acc
 
-    def foldRight[B](self, f: Callable[[A, B], B], initial: B) -> B:
+    def fold_right[B](self, f: Callable[[A, B], B], initial: B) -> B:
         state = initial
         for item in reversed(self):
             state = f(item, state)

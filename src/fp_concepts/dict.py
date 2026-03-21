@@ -41,7 +41,7 @@ class Dict[K, V](dict, Functor):
     def imap[B](self, g: Callable[[K, V], B]):
         return self.__class__({k: g(k, v) for k, v in self.items()})
 
-    def foldM[M](self, f: Callable[[V], M], monoid: Monoid) -> M:
+    def fold_map[M](self, f: Callable[[V], M], monoid: Monoid) -> M:
         r = monoid.munit
         for v in self.values():
             m = f(v)
@@ -54,7 +54,7 @@ class Dict[K, V](dict, Functor):
             acc = f(acc, v)
         return acc
 
-    def ifoldM[M](self, f: Callable[[K, V], M], monoid: Monoid) -> M:
+    def ifold_map[M](self, f: Callable[[K, V], M], monoid: Monoid) -> M:
         r = monoid.munit
         for k, v in self.items():
             m = f(k, v)

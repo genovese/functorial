@@ -59,7 +59,7 @@ from fp_concepts.Either    import Left, Right
 from fp_concepts.List      import NonEmptyList
 from fp_concepts.Trees     import LeafyBinaryTree
 from fp_concepts.functions import identity
-from fp_concepts.ops       import foldMap, Collect
+from fp_concepts.ops       import fold_map_default, Collect
 
 class PriorityQueue:
     def __init__(self):
@@ -135,7 +135,7 @@ def make_code[A](bt: LeafyBinaryTree[A]) -> NonEmptyList[tuple[A, str]]:
         index_str = "".join(map(str, index))
         return (value, index_str)
 
-    return NonEmptyList(foldMap(identity, bt.imap(code_pair), Collect))
+    return NonEmptyList(fold_map_default(identity, bt.imap(code_pair), Collect))
 
 class HuffmanCode[A](NamedTuple):
     code_tree: LeafyBinaryTree[A]

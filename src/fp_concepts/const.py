@@ -2,7 +2,7 @@
 #
 # The Const a Functor
 #
-# newtype Const a b = Const { runConst : a }
+# newtype Const a b = Const { run_const : a }
 #
 # Const a is a functor that ignores its "element type" b.
 # If a is a Monoid, then Const a is an Applicative,
@@ -26,7 +26,7 @@ from .applicative import Applicative
 from .monoids     import Monoid
 from .traversable import Traversable
 
-__all__ = ['Const', 'runConst', 'makeConst', 'typeConst']
+__all__ = ['Const', 'run_const', 'make_const', 'type_const']
 
 _const_registry: dict[Monoid, type[Applicative]] = {}
 
@@ -36,7 +36,7 @@ def Const(x, monoid: Monoid | None = None):
 
     Const a is a functor that ignores its "element type" b.
 
-        newtype Const a b = Const { runConst : a }
+        newtype Const a b = Const { run_const : a }
 
     If a is a Monoid, then Const a is an Applicative, otherwise is
     is plain Functor. If the `monoid` argument is supplied, it
@@ -65,7 +65,7 @@ def Const(x, monoid: Monoid | None = None):
 
                 @classmethod
                 def run(cls, fab: ConstM[A, B]) -> A:
-                    return fab._value
+                    return fab._value   # pylint: disable=protected-access
 
                 @property
                 def monoid_of(self):
@@ -79,7 +79,7 @@ def Const(x, monoid: Monoid | None = None):
                     return Const(cls._monoid.munit, monoid=cls._monoid)
 
                 def map2[C, D](self, _g: Callable[[B, C], D], fc: ConstM[A, C]) -> ConstM[A, D]:
-                    return Const(self._monoid.mcombine(self._value, fc._value), self._monoid)
+                    return Const(self._monoid.mcombine(self._value, fc._value), self._monoid)   # pylint: disable=protected-access
 
                 def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
                     return f.pure(self)
@@ -160,7 +160,7 @@ def Const(x, monoid: Monoid | None = None):
 
         @classmethod
         def run(cls, fab: Const_[A, B]) -> A:
-            return fab._value
+            return fab._value    # pylint: disable=protected-access
 
         @property
         def monoid(self):
@@ -174,15 +174,15 @@ def Const(x, monoid: Monoid | None = None):
 
     return Const_()
 
-def runConst(x):
+def run_const(x):
     "An accessible version of Const.run that works with all incarnations of Const[A, B]."
-    return x._value
+    return x._value   # pylint: disable=protected-access
 
-def makeConst(m: Monoid):
+def make_const(m: Monoid):
     "A factory that returns function the function x -> Const(x, monoid=m)."
     return lambda x: Const(x, m)
 
-def typeConst(m: Monoid):
+def type_const(m: Monoid):
     """Returns the base Const type associated with a given Monoid.
 
     This type should *not* be used in lieu of the Const() constructor.

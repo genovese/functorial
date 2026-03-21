@@ -11,7 +11,7 @@ from __future__    import annotations
 from typing        import Callable
 
 from ..bicofunctor import Bicofunctor
-from ..const       import Const, runConst, makeConst, typeConst
+from ..const       import Const, run_const, make_const, type_const
 from ..either      import either_, Left, Right
 from ..maybe       import Nothing
 from ..monoids     import Monoid
@@ -81,15 +81,15 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
         return Forget(either_(const(self._monoid.munit), self._a_to_r), self._monoid)
 
     def wander(self, f):   # wander : Applicative f => (a -> f b) -> (s -> f t)
-        cls = typeConst(self._monoid)
-        g = eff(makeConst(self._monoid), self._a_to_r, effect=cls)
-        return Forget(compose(runConst, f(g)), self._monoid)
+        cls = type_const(self._monoid)
+        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
+        return Forget(compose(run_const, f(g)), self._monoid)
 
     def visit(self, f):
-        cls = typeConst(self._monoid)
-        g = eff(makeConst(self._monoid), self._a_to_r, effect=cls)
+        cls = type_const(self._monoid)
+        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
         pure = Const(self._monoid.munit, self._monoid).pure  # Could use as is, but use the function
-        return Forget(compose(runConst, lambda s: f(pure, g, s)), self._monoid)
+        return Forget(compose(run_const, lambda s: f(pure, g, s)), self._monoid)
 
 class ForgetM[R, A](Strong, Cochoice, Choice):
     """A profunctor representing a mapping to a fixed type.

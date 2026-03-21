@@ -19,7 +19,7 @@ from .monad          import Monad
 from .traversable    import Traversable
 
 
-__all__ = ['Either', 'Left', 'Right', 'isLeft', 'isRight', 'either', 'either_', ]
+__all__ = ['Either', 'Left', 'Right', 'is_left', 'is_right', 'either', 'either_', ]
 
 
 class Either[A, B](Monad, Bifunctor, Traversable):
@@ -47,7 +47,7 @@ class Either[A, B](Monad, Bifunctor, Traversable):
         try:
             x = generator.send(None)
             while True:
-                if isLeft(x):
+                if is_left(x):
                     return x
                 x = x.bind(generator.send)
         except StopIteration as finished:
@@ -121,12 +121,12 @@ class Right[A, B](Either[A, B]):
         return Right(g(self._value))
 
     def map2[C, D](self, g: Callable[[B, C], D], fc: Either[A, C]) -> Either[A, D]:
-        if isLeft(fc):
+        if is_left(fc):
             return cast(Left[A, D], fc)
-        return Right(g(self._value, cast(Right[A, C], fc)._value))
+        return Right(g(self._value, cast(Right[A, C], fc)._value))  # pylint: disable=protected-access
 
-    def bind[C](self, f: Callable[[B], Either[A, C]]) -> Either[A, C]:
-        return f(self._value)
+    def bind[C](self, g: Callable[[B], Either[A, C]]) -> Either[A, C]:
+        return g(self._value)
 
     def bimap[C, D](self, _f: Callable[[A], C],  g: Callable[[B], D]) -> Either[C, D]:    # type: ignore
         return Right(g(self._value))
@@ -134,10 +134,10 @@ class Right[A, B](Either[A, B]):
     def traverse(self, _f: type[Applicative], g: Callable[[B], Applicative]) -> Applicative:  # g : a -> f b
         return map(Right, g(self._value))
 
-def isLeft[A, B](x: Either[A, B]) -> TypeGuard[Left[A, B]]:
+def is_left[A, B](x: Either[A, B]) -> TypeGuard[Left[A, B]]:
     return isinstance(x, Left)
 
-def isRight[A, B](x: Either[A, B]) -> TypeGuard[Right[A, B]]:
+def is_right[A, B](x: Either[A, B]) -> TypeGuard[Right[A, B]]:
     return isinstance(x, Right)
 
 def either[A, B, C](f: Callable[[A], C], g: Callable[[B], C], m: Either[A, B]) -> C:

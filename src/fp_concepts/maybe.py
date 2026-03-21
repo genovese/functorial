@@ -8,7 +8,7 @@
 # and a Monad.
 #
 # We can destructure Maybe's with pattern matching or the maybe
-# function, the functions isNothing and isSome provide (type guarding)
+# function, the functions is_nothing and is_some provide (type guarding)
 # predicates.
 #
 # See List for utility functions map_maybe and cat_maybes.
@@ -29,7 +29,7 @@ from .monad       import Monad
 from .traversable import Traversable
 from .unit        import Unit
 
-__all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'isNothing', 'isSome',]
+__all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'is_nothing', 'is_some',]
 
 
 # ATTN: If making Nothing a ContingentSingletonFromABC
@@ -82,7 +82,7 @@ class Maybe[A](Monad, Traversable, Alternative, ABC):
         try:
             x = generator.send(None)
             while True:
-                if isNothing(x):
+                if is_nothing(x):
                     return x
                 x = x.bind(generator.send)
         except StopIteration as finished:
@@ -172,10 +172,10 @@ class Nothing[A](Maybe[A]):
         # g : () -> a -> f b
         return f.pure(self)
 
-def isNothing[A](x: Maybe[A]) -> TypeGuard[Nothing]:
+def is_nothing[A](x: Maybe[A]) -> TypeGuard[Nothing]:
     return isinstance(x, Nothing)
 
-def isSome[A](x: Maybe[A]) -> TypeGuard[Some]:
+def is_some[A](x: Maybe[A]) -> TypeGuard[Some]:
     return isinstance(x, Some)
 
 def maybe[A, B](default: B, f: Callable[[A], B], m: Maybe[A]) -> B:

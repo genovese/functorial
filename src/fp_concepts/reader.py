@@ -1,7 +1,7 @@
 #
 # The Reader Monad
 #
-# newtype Reader r a = Reader { runReader : s -> (s, a) }
+# newtype Reader r a = Reader { run_reader : s -> (s, a) }
 #
 # ruff: noqa: N802, E731
 
@@ -14,7 +14,7 @@ from .monad       import Monad
 from .profunctor  import Profunctor
 from .functions   import compose, identity
 
-__all__ = ['Reader', 'ask', 'ask_for', 'runReader']
+__all__ = ['Reader', 'ask', 'ask_for', 'run_reader']
 
 
 class GetReaderDescriptor:  # Enables class data of type Reader
@@ -29,13 +29,14 @@ class Reader[R, A](Monad, Profunctor):
     # Utility Constructors
     #
 
-    ask: Reader[R, R] = GetReaderDescriptor()
+    ask: Reader[R, R] = GetReaderDescriptor()   # type: ignore
 
     #
     # ``Running'' Reader with the given environment
     #
 
-    def run[R, A](self, r: R) -> A:
+    def run(self, r: R) -> A:
+        """Applies a Reader object with a given environment."""
         return self._reader(r)
 
     #
@@ -49,7 +50,7 @@ class Reader[R, A](Monad, Profunctor):
     def pure(cls, a):
         return cls(lambda _r: a)
 
-    def map2[B, C](self, g:Callable[[A, B], C], fb: Reader[R, B]) -> Reader[R, C]:
+    def map2[B, C](self, g: Callable[[A, B], C], fb: Reader[R, B]) -> Reader[R, C]:
         def mapped2_reader(r):
             a = self.run(r)
             b = fb.run(r)
@@ -86,8 +87,8 @@ class Reader[R, A](Monad, Profunctor):
 # Reader Utilties (esp useful in do blocks)
 #
 
-ask = Reader(identity)
+ask = Reader(identity)   # type: ignore
 ask_for = compose(Reader, itemgetter)
 
-def runReader[R, A](r: Reader[R, A], env: R) -> A:
+def run_reader[R, A](r: Reader[R, A], env: R) -> A:
     return r.run(env)

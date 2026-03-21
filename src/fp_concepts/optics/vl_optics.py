@@ -15,7 +15,7 @@ from operator      import itemgetter
 from typing        import TypeGuard
 
 from ..applicative import ap
-from ..const       import Const, makeConst, runConst
+from ..const       import Const, make_const, run_const
 from ..functor     import lift, map                       # pylint: disable=redefined-builtin
 from ..identity    import Identity
 from ..list        import List
@@ -118,10 +118,10 @@ def lens(getter, setter):
 #
 
 def view(setter):
-    return compose(runConst, setter(Const))
+    return compose(run_const, setter(Const))
 
 def collect(setter, monoid=Collect):
-    return compose(runConst, setter(makeConst(monoid)))
+    return compose(run_const, setter(make_const(monoid)))
 
 def over(setter, f):
     return compose(Identity.run, setter(compose(Identity, f)))
@@ -316,9 +316,9 @@ def capitalize(s: str) -> str:
 # ATTN: Example results out of date
 if __name__ == '__main__':
     from ..trees    import RoseTree
-    from ..maybe    import isSome
+    from ..maybe    import is_some
     from ..monoids  import First, Monoid
-    from ..ops      import foldMap
+    from ..ops      import fold_map_default
     from ..wrappers import get_effect
 
     c = compose
@@ -410,23 +410,23 @@ if __name__ == '__main__':
     # Saving for later
     def foldedSave(a_to_Cma, m=Collect):
         def folded_on(s):
-            return Const(foldMap(c(runConst, a_to_Cma), s, m=m), monoid=m)
+            return Const(fold_map_default(c(run_const, a_to_Cma), s, m=m), monoid=m)
         return folded_on
 
     def foldedSave2(a_to_Cma, m=Collect):
         f = get_effect(a_to_Cma)
         monoid = getattr(f, 'monoid', None) or m or Collect
         def folded_on(s):
-            return Const(foldMap(c(runConst, a_to_Cma), s, m=m), monoid=monoid)
+            return Const(fold_map_default(c(run_const, a_to_Cma), s, m=m), monoid=monoid)
         return folded_on
 
     def folded(a_to_Cma, use={Monoid: Collect}):
         def folded_on(s):
-            return Const(foldMap(c(runConst, a_to_Cma), s, m=use[Monoid]), monoid=use[Monoid])
+            return Const(fold_map_default(c(run_const, a_to_Cma), s, m=use[Monoid]), monoid=use[Monoid])
         return folded_on
      
     def foldMapOf(l, f, m=Collect):
-        return c(runConst, l(c(makeConst(m), f)))
+        return c(run_const, l(c(make_const(m), f)))
 
     # def collect(x):
     #     return maybe(List(), List.of, x)
@@ -440,9 +440,9 @@ if __name__ == '__main__':
         return lambda f: folded(c(f, lambda x: List.of(transform(x)) if predicate(x) else List()))
 
     fromSome = lambda x: x._value  # example
-    view(keep(isSome, fromSome))( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
+    view(keep(is_some, fromSome))( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
-    somes = keep(isSome, fromSome)
+    somes = keep(is_some, fromSome)
     view(somes)( List.of(Some(4), Nothing(), Some(10), Nothing(), Some(16)) )
     #=> [4, 10, 16]
     x: RoseTree[int] = RoseTree([1, [2, [3], [4], [5]], [6, [7, [8, [9], [10]]]]])

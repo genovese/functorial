@@ -229,30 +229,30 @@ class RoseTree[A](Applicative):
 
         return RoseTree(unfold_sexp(seed))
 
-    def foldTree[B](self, f: Callable[[A, list[B]], B]) -> B:
+    def fold_tree[B](self, f: Callable[[A, list[B]], B]) -> B:
         """ Folds the tree into a summary value, in inorder sequence.
 
         This has type Tree a -> (a -> [b] -> b) -> Tree b and is the
         formal dual of the RoseTree.unfold method.
 
-        See also the fold, foldRight, and foldMap methods.
+        See also the fold, fold_right, and fold_map methods.
 
         """
         def go(t):
             return f(t._value, map(go, t._subtrees))
         return go(self)
 
-    def foldM[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+    def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         """Reduces a tree to a monoidal value with a monoidal value for each node.
 
-        We could use the default foldMap for traversables here, but this
+        We could use the fold_map_default for traversables here, but this
         is illustrative and cleaner.
 
         """
         def rf(a: A, mvals: list[M]) -> M:
             return List(mvals).fold(monoid.mcombine, f(a))
 
-        return self.foldTree(rf)
+        return self.fold_tree(rf)
 
     def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
         """Left fold of the tree into a summary value, in preorder sequence.
@@ -263,14 +263,14 @@ class RoseTree[A](Applicative):
 
         return go(initial, self)
 
-    def foldRight[B](self, f: Callable[[A, B], B], initial: B) -> B:
+    def fold_right[B](self, f: Callable[[A, B], B], initial: B) -> B:
         """Right fold of the tree into a single value, in postorder sequence.
 
         This has type Tree a -> (a -> b -> b) -> Tree b.
 
         """
         def go(t, init):
-            return f(t._value, t._subtrees.foldRight(go, init))
+            return f(t._value, t._subtrees.fold_right(go, init))
 
         return go(self, initial)
 
