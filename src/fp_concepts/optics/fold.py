@@ -48,8 +48,23 @@ class Fold(Optic, optic_is=OpticIs.FOLD):  # ATTN:Placeholder
 def fold_vl(f):
     return Fold(compose(rphantom, wander_(f), rphantom))
 
+
+def _folded_fn(p):
+    """Direct fold_map path for Foldable structures.
+
+    Bypasses the VL/wander layer: when p is a Forget, use fold_map
+    directly on the structure rather than going through a VL traversal.
+    This means folded only requires Foldable, not Traversable.
+    """
+    if isinstance(p, Forget):
+        f = Forget.run(p)
+        m = p._monoid    # pylint: disable=protected-access
+        return Forget(lambda s: s.fold_map(f, m), m)
+    return rphantom(p.wander(traverse_)(rphantom(p)))
+
+
 # folded : Foldable f => Fold (f a) a
-folded = fold_vl(traverse_)  # ATTN: This should be Foldable_.traverse_, but that raises a difficulty.
+folded = Fold(compose(rphantom, _folded_fn, rphantom))
 
 def foldedA(effect):
     return fold_vl(lambda g: traverse_(g, effect=effect))

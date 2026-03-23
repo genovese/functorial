@@ -17,22 +17,18 @@ from collections.abc import Callable
 from typing          import Protocol
 
 from .applicative    import Applicative, IdentityA, ap_second
+from .functions      import identity
 from .maybe          import Maybe, Some, Nothing
 from .monoids        import Conjunction, Disjunction, Endo, First, Monoid
 
 
-__all__ = ['Foldable', 'IndexedFoldable', 'fold_map', 'fold', 'ifold_map', 'ifold',]
+__all__ = ['Foldable', 'Foldable_', 'IndexedFoldable', 'IndexedFoldable_', 'fold_map', 'fold', 'ifold_map', 'ifold',]
 
 
 class Foldable[A](Protocol):
     @abstractmethod
     def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         "fold_map : Monoid m => Self -> (a -> m) -> m"
-        ...
-
-    @abstractmethod
-    def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
-        "Standard left fold. Note argument order in folding function."
         ...
 
 # ATTN: should fold_right be part of the protocol, thinking not
@@ -45,25 +41,35 @@ class Foldable[A](Protocol):
 # follow from baseline. Instances can override these as needed.
 #
 class Foldable_[A](Foldable[A]):
-    """Version of Foldable for inheritance, with default implementations of other methods.
+    """Foldable base class for inheritance, with default implementations.
 
-    Foldable is a protocol, prefer this if inheriting directly.
+    Single primitive: fold_map. Everything else is derived and can be
+    overridden for efficiency. Prefer inheriting from this over implementing
+    Foldable directly.
     """
     @abstractmethod
     def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         ...
 
-    @abstractmethod
-    def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
-        ...
-
     def fold_right[B](self, f: Callable[[A, B], B], initial: B) -> B:
-        "Right fold: ATTN"
-        def f_partial(a: A) -> Callable[[B], B]:
-            return lambda b: f(a, b)
+        """Right fold derived from fold_map via the Endo monoid."""
+        return self.fold_map(lambda a: lambda b: f(a, b), Endo)(initial)
 
-        f_prime = self.fold_map(f_partial, Endo)
-        return f_prime(initial)
+    def fold[B](self, f: Callable[[B, A], B], initial: B) -> B:
+        """Standard left fold. Note argument order in folding function.
+
+        This left fold derived from fold_right via difference lists.
+        This is correct but has O(n) stack depth. Override directly for
+        strict efficiency (most containers should).
+
+        Returns the folded result.
+
+        """
+        return self.fold_right(lambda a, k: lambda acc: k(f(acc, a)), identity)(initial)  # type: ignore[return-value, arg-type]
+
+    def to_list(self) -> list[A]:
+        """Collects all elements into a list in left-to-right order."""
+        return self.fold_right(lambda a, acc: [a] + acc, [])
 
     # traverse_ : (a -> f b) -> t a -> f ()
     def traverse_(self, f: Callable[[A], Applicative], effect: type[Applicative] = IdentityA) -> Applicative:
@@ -90,14 +96,43 @@ class Foldable_[A](Foldable[A]):
         return self.fold(_extend, [])
 
 
-class IndexedFoldable[I, A](Protocol):
+class IndexedFoldable[I, A](Foldable[A], Protocol):
     @abstractmethod
     def ifold_map[M](self, f: Callable[[I, A], M], monoid: Monoid) -> M:
         ...
 
+
+class IndexedFoldable_[I, A](IndexedFoldable[I, A], Foldable_[A]):
+    """IndexedFoldable base class for inheritance, with default implementations.
+
+    Single primitive: ifold_map. fold_map is derived by forgetting the index,
+    which unblocks all Foldable_ defaults (fold_right, fold, to_list, etc.).
+    Indexed variants (ifold_right, ifold, to_indexed_list) are also derived.
+    """
     @abstractmethod
-    def ifold[B](self, f: Callable[[I, B, A], B], initial: B) -> B:
+    def ifold_map[M](self, f: Callable[[I, A], M], monoid: Monoid) -> M:
         ...
+
+    def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
+        """Fold ignoring the index; derived from ifold_map."""
+        return self.ifold_map(lambda _i, a: f(a), monoid)
+
+    def ifold_right[B](self, f: Callable[[I, A, B], B], initial: B) -> B:
+        """Indexed right fold derived from ifold_map via the Endo monoid."""
+        return self.ifold_map(lambda i, a: lambda b: f(i, a, b), Endo)(initial)
+
+    def ifold[B](self, f: Callable[[I, B, A], B], initial: B) -> B:
+        """Indexed left fold derived from ifold_right via difference lists.
+
+        This is correct but has O(n) stack depth. Override for efficiency.
+        """
+        return self.ifold_right(  # type: ignore[return-value]
+            lambda i, a, k: lambda acc: k(f(i, acc, a)), identity
+        )(initial)
+
+    def to_indexed_list(self) -> list[tuple[I, A]]:
+        """Collects all (index, element) pairs in left-to-right order."""
+        return self.ifold_right(lambda i, a, acc: [(i, a)] + acc, [])
 
 
 #
@@ -122,7 +157,7 @@ def fold_map[A, M](f: Callable[[A], M], xs: Foldable[A], monoid: Monoid) -> M:
     """
     return xs.fold_map(f, monoid)
 
-def fold[A, B](f: Callable[[B, A], B], initial: B, xs: Foldable[A]) -> B:
+def fold[A, B](f: Callable[[B, A], B], initial: B, xs: Foldable_[A]) -> B:
     """Fold over a structure accumulating a result from an initial value.
 
     This is a general form of functools.reduce. It is designed to work
@@ -165,7 +200,7 @@ def ifold_map[I, A, M](f: Callable[[I, A], M], xs: IndexedFoldable[I, A], monoid
     return xs.ifold_map(f, monoid)
 
 
-def ifold[I, A, B](f: Callable[[I, B, A], B], xs: IndexedFoldable[I, A], initial: B) -> B:
+def ifold[I, A, B](f: Callable[[I, B, A], B], xs: IndexedFoldable_[I, A], initial: B) -> B:
     """Fold over a structure accumulating a result from an initial value.
 
     This is a general form of functools.reduce. It is designed to work
