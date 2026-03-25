@@ -134,6 +134,12 @@ class IndexedFoldable_[I, A](IndexedFoldable[I, A], Foldable_[A]):
         """Collects all (index, element) pairs in left-to-right order."""
         return self.ifold_right(lambda i, a, acc: [(i, a)] + acc, [])
 
+    def itraverse_(self, f: Callable[[I, A], Applicative], effect: type[Applicative] = IdentityA) -> Applicative:
+        """Effect-discarding indexed traversal, derived from ifold_right."""
+        def act(i: I, a: A, eff: Applicative) -> Applicative:
+            return ap_second(f(i, a), eff)
+        return self.ifold_right(act, effect.pure(()))
+
 
 #
 # Generic Functions
