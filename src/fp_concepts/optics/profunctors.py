@@ -21,7 +21,7 @@ from .cochoice     import Cochoice
 from .costrong     import Costrong
 from .strong       import Strong
 
-__all__ = ['Forget', 'ForgetM', 'Star', 'Costar']
+__all__ = ['Forget', 'ForgetM', 'IndexedForget', 'Indexed', 'IndexedStar', 'Star', 'Costar']
 
 
 #
@@ -100,6 +100,73 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
         pure = Const(self._monoid.munit, self._monoid).pure  # Could use as is, but use the function
         return Forget(compose(run_const, lambda s: f(pure, g, s)), self._monoid)
 
+#
+# IndexedForget is the indexed analogue of Forget, for iview/icollect/ifold_map_of.
+#
+# newtype IndexedForget i r a b = IndexedForget { runIndexedForget :: i -> a -> r }
+#
+# Like Forget, the second type argument b is a phantom type (ignored in dimap).
+# Unlike Forget, it carries an index i that threads through indexed optic chains
+# via _pack_index accumulation.
+#
+
+class IndexedForget[I, R, A]:
+    """An indexed profunctor for reading actions: wraps i -> a -> r.
+
+    newtype IndexedForget i r a b = IndexedForget { runIndexedForget :: i -> a -> r }
+
+    The type argument b is a phantom (ignored). This is the canonical
+    profunctor for iview, icollect, and ifold_map_of — the indexed
+    counterparts of view, collect, and fold_map_of.
+
+    Like Forget, carries a Monoid for indexed fold actions.
+    Use IndexedForget.run(p) to extract the enclosed function.
+    """
+    def __init__(
+            self,
+            f: Callable[[I, A], R],
+            monoid: Monoid = MissingMonoid('IndexedForget used as fold without a Monoid'),
+    ):
+        self._f = f
+        self._monoid = monoid
+
+    @classmethod
+    def run(cls, p: IndexedForget) -> Callable[[I, A], R]:
+        """Extracts the enclosed function."""
+        return p._f    # pylint: disable=protected-access
+
+    def dimap(self, pre, _post):
+        # dimap f _ (IndexedForget h) = IndexedForget (\i s -> h i (f s))
+        # _post is phantom: b is never observed
+        f = self._f
+        return IndexedForget(lambda i, s: f(i, pre(s)), self._monoid)
+
+    # Strong: into_first/into_second project the focus from a pair
+
+    def into_first(self):
+        f = self._f
+        return IndexedForget(lambda i, sc: f(i, sc[0]), self._monoid)
+
+    def into_second(self):
+        f = self._f
+        return IndexedForget(lambda i, cs: f(i, cs[1]), self._monoid)
+
+    # Choice: into_left/into_right project the focus from a sum,
+    # returning munit on the absent branch
+
+    def into_left(self):
+        f, m = self._f, self._monoid
+        return IndexedForget(
+            lambda i, ac: either_(lambda a: f(i, a), const(m.munit))(ac), m
+        )
+
+    def into_right(self):
+        f, m = self._f, self._monoid
+        return IndexedForget(
+            lambda i, ca: either_(const(m.munit), lambda a: f(i, a))(ca), m
+        )
+
+
 class ForgetM[R, A](Strong, Cochoice, Choice, Bicofunctor):
     """A profunctor representing a mapping to a fixed type.
 
@@ -164,6 +231,149 @@ class ForgetM[R, A](Strong, Cochoice, Choice, Bicofunctor):
         g = lambda a: _ConstM(fn(a))
         point = lambda _: _ConstM(Nothing())
         return ForgetM(lambda s: f(point, g, s)._v)
+
+#
+# Indexed is a profunctor wrapping i -> a -> b.
+#
+# newtype Indexed i a b = Indexed { runIndexed :: i -> a -> b }
+#
+# An indexed profunctor carries an index i alongside each value of type a.
+# It threads through indexed optic composition via pair accumulation:
+# composing Indexed i with Indexed j yields Indexed (i, j) via reindex.
+#
+# It has Strong and Choice instances (index threads through untouched),
+# and a reindex combinator for changing the index type.
+#
+
+class Indexed[I, A, B](Strong, Choice):
+    """An indexed profunctor wrapping i -> a -> b.
+
+    Indexed i a b represents a profunctor where each value of type a is
+    paired with an index of type i, producing a result of type b.
+
+    newtype Indexed i a b = Indexed { runIndexed :: i -> a -> b }
+
+    When composing two indexed optics (indices I and J), the indices
+    accumulate as pairs (I, J) via reindex. The Strong and Choice
+    instances thread the index through untouched.
+
+    Use Indexed.run(p) to extract the enclosed function.
+    """
+    def __init__(self, f: Callable[[I, A], B]) -> None:
+        self._f = Function(f)
+        super().__init__()
+
+    @classmethod
+    def run(cls, p: Indexed) -> Callable[[I, A], B]:
+        """Extracts the enclosed function."""
+        return p._f    # pylint: disable=protected-access
+
+    def dimap(self, pre, post):
+        # dimap f g (Indexed h) = Indexed (\i a -> g (h i (f a)))
+        f = self._f
+        return Indexed(lambda i, a: post(f(i, pre(a))))
+
+    # Strong: index threads through untouched
+
+    def into_first(self):
+        # into_first (Indexed h) = Indexed (\i (a, c) -> (h i a, c))
+        f = self._f
+        return Indexed(lambda i, ac: Pair(f(i, ac[0]), ac[1]))
+
+    def into_second(self):
+        # into_second (Indexed h) = Indexed (\i (c, a) -> (c, h i a))
+        f = self._f
+        return Indexed(lambda i, ca: Pair(ca[0], f(i, ca[1])))
+
+    # Choice: index threads through untouched
+
+    def into_left(self):
+        # into_left (Indexed h) = Indexed (\i -> either (Left . h i) Right)
+        f = self._f
+        return Indexed(lambda i, ac: either_(lambda a: Left(f(i, a)), Right)(ac))
+
+    def into_right(self):
+        # into_right (Indexed h) = Indexed (\i -> either Left (Right . h i))
+        f = self._f
+        return Indexed(lambda i, ca: either_(Left, lambda a: Right(f(i, a)))(ca))
+
+    def reindex[J](self, g: Callable[[J], I]) -> Indexed[J, A, B]:
+        """Changes the index type via a contravariant function J -> I.
+
+        reindex g (Indexed h) = Indexed (\\j a -> h (g j) a)
+
+        Used in indexed optic composition: when an outer indexed optic
+        (index I) is composed with an inner indexed optic (index J), the
+        combined index is (I, J). Each side uses reindex to project out
+        its own component from the pair.
+        """
+        f = self._f
+        return Indexed(lambda j, a: f(g(j), a))
+
+
+#
+# IndexedStar is the indexed analogue of Star, for itraverse_of / effectful traversal.
+#
+# newtype IndexedStar i f a b = IndexedStar { runIndexedStar :: i -> a -> f b }
+#
+# Like Star, it carries an effect class (for pure/Applicative operations).
+# Like Indexed, it threads an accumulated index i through optic chains.
+#
+
+class IndexedStar[I, A, B](Strong, Choice):
+    """Indexed profunctor for effectful traversal actions: wraps i -> a -> f b.
+
+    newtype IndexedStar i f a b = IndexedStar { runIndexedStar :: i -> a -> f b }
+
+    The canonical profunctor for itraverse_of.  Like Star, requires
+    Functor f for Strong and Applicative f for Choice and wander.
+
+    Use IndexedStar.run(p) to extract the enclosed function.
+    """
+    def __init__(self, f: Callable[[I, A], Functor[B]], effect: type[Functor] = Identity):
+        self._f = f
+        self._effect = effect
+        super().__init__()
+
+    @classmethod
+    def run(cls, p: IndexedStar) -> Callable[[I, A], Functor[B]]:
+        """Extracts the enclosed function."""
+        return p._f    # pylint: disable=protected-access
+
+    def dimap(self, pre, post):
+        f, eff = self._f, self._effect
+        return IndexedStar(lambda i, s: map(post, f(i, pre(s))), eff)
+
+    # Strong: index threads through untouched
+
+    def into_first(self):
+        f, eff = self._f, self._effect
+        def k(i, ac):
+            a, c = ac
+            return map(lambda b: Pair(b, c), f(i, a))
+        return IndexedStar(k, eff)
+
+    def into_second(self):
+        f, eff = self._f, self._effect
+        def k(i, ca):
+            c, a = ca
+            return map(lambda b: Pair(c, b), f(i, a))
+        return IndexedStar(k, eff)
+
+    # Choice: requires Applicative f
+
+    def into_left(self):
+        f, eff = self._f, self._effect
+        def k(i, ac):
+            return either_(compose(lift(Left), f(i)), compose(eff.pure, Right))(ac)
+        return IndexedStar(k, eff)
+
+    def into_right(self):
+        f, eff = self._f, self._effect
+        def k(i, ca):
+            return either_(compose(eff.pure, Left), compose(lift(Right), f(i)))(ca)
+        return IndexedStar(k, eff)
+
 
 #
 # Star is a profunctor that lifts an arrow a -> f b into a profunctor.

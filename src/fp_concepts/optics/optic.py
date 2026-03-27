@@ -25,6 +25,35 @@ class OpticIs(StrEnum):
     TRAVERSAL = "Traversal"
     AFFINE_FOLD = "Affine Fold"
     FOLD = "Fold"
+    # Indexed variants — carry an index type alongside the focus
+    IX_LENS             = "IxLens"
+    IX_PRISM            = "IxPrism"
+    IX_AFFINE_TRAVERSAL = "IxAffineTraversal"
+    IX_TRAVERSAL        = "IxTraversal"
+    IX_GETTER           = "IxGetter"
+    IX_AFFINE_FOLD      = "IxAffineFold"
+    IX_FOLD             = "IxFold"
+    IX_SETTER           = "IxSetter"
+
+# Index accumulation sentinel and combinator for indexed optics.
+#
+# _MISSING marks "no index accumulated yet." The top-level iview/iover
+# calls start with _MISSING, allowing the outermost indexed optic to
+# return its index bare (not wrapped in a pair).
+#
+# _pack_index combines an incoming accumulated index with a new index
+# produced by the current optic:
+#   _pack_index(_MISSING, ix) = ix          -- first optic in chain
+#   _pack_index(acc,      ix) = (acc, ix)   -- subsequent optics pair up
+#
+# Three composed optics i, j, k yield ((i, j), k) — left-nested,
+# matching the evaluation order of compose(f1, f2, f3).
+#
+_MISSING = object()
+
+def _pack_index(acc, ix):
+    return ix if acc is _MISSING else (acc, ix)
+
 
 class Optic(Function):
     """An optic is a first-class profunctor transformer p a b -> p s t.
@@ -226,19 +255,64 @@ _OPTIC_COMPOSITIONS: dict[tuple[OpticIs, OpticIs], OpticIs] = {
     (OpticIs.SETTER, OpticIs.SETTER):                OpticIs.SETTER,
 }
 
+# Mappings between plain and indexed optic types.
+#
+# ISO as indexed degrades to IX_LENS: an iso carries no index of its own,
+# so when combined with an indexed optic the symmetric structure is lost.
+# REVIEW has no indexed variant: write-only optics do not expose an index.
+#
+_PLAIN_TO_IX: dict[OpticIs, OpticIs] = {
+    OpticIs.ISO:               OpticIs.IX_LENS,
+    OpticIs.LENS:              OpticIs.IX_LENS,
+    OpticIs.PRISM:             OpticIs.IX_PRISM,
+    OpticIs.AFFINE_TRAVERSAL:  OpticIs.IX_AFFINE_TRAVERSAL,
+    OpticIs.TRAVERSAL:         OpticIs.IX_TRAVERSAL,
+    OpticIs.GETTER:            OpticIs.IX_GETTER,
+    OpticIs.AFFINE_FOLD:       OpticIs.IX_AFFINE_FOLD,
+    OpticIs.FOLD:              OpticIs.IX_FOLD,
+    OpticIs.SETTER:            OpticIs.IX_SETTER,
+}
+
+_IX_TO_PLAIN: dict[OpticIs, OpticIs] = {
+    OpticIs.IX_LENS:              OpticIs.LENS,
+    OpticIs.IX_PRISM:             OpticIs.PRISM,
+    OpticIs.IX_AFFINE_TRAVERSAL:  OpticIs.AFFINE_TRAVERSAL,
+    OpticIs.IX_TRAVERSAL:         OpticIs.TRAVERSAL,
+    OpticIs.IX_GETTER:            OpticIs.GETTER,
+    OpticIs.IX_AFFINE_FOLD:       OpticIs.AFFINE_FOLD,
+    OpticIs.IX_FOLD:              OpticIs.FOLD,
+    OpticIs.IX_SETTER:            OpticIs.SETTER,
+}
+
+
 def composed_optic_is(opt1: OpticIs, opt2: OpticIs) -> OpticIs:
     """Returns the type of the optic formed by composing opt1 (outer) with opt2 (inner).
+
+    For plain @ plain, uses the composition table directly.
+
+    For any composition involving at least one indexed optic, the result is
+    the indexed version of what the plain composition would give.  The index
+    accumulates as a pair (I, J) when both sides carry one.
 
     Raises OpticTypeError for incompatible combinations (e.g. Getter ∘ Setter).
 
     """
     result = _OPTIC_COMPOSITIONS.get((opt1, opt2))
-    if result is None:
-        raise OpticTypeError(
-            f'Cannot compose {_optic_desc(opt1, False)} (outer) with {_optic_desc(opt2, False)} (inner): '
-            f'incompatible optic types'
-        )
-    return result
+    if result is not None:
+        return result
+
+    # At least one side is indexed: compose the plain bases, then lift.
+    base1 = _IX_TO_PLAIN.get(opt1, opt1)
+    base2 = _IX_TO_PLAIN.get(opt2, opt2)
+    if (opt1 in _IX_TO_PLAIN) or (opt2 in _IX_TO_PLAIN):
+        base_result = _OPTIC_COMPOSITIONS.get((base1, base2))
+        if base_result is not None:
+            return _PLAIN_TO_IX.get(base_result, base_result)
+
+    raise OpticTypeError(
+        f'Cannot compose {_optic_desc(opt1, False)} (outer) with {_optic_desc(opt2, False)} (inner): '
+        f'incompatible optic types'
+    )
 
 
 #
@@ -282,6 +356,47 @@ _OPTIC_SUBTYPES: dict[OpticIs, frozenset[OpticIs]] = {
     OpticIs.FOLD:   frozenset({OpticIs.FOLD}),
     OpticIs.REVIEW: frozenset({OpticIs.REVIEW}),
     OpticIs.SETTER: frozenset({OpticIs.SETTER}),
+
+    # Indexed variants: each IX_X can be cast to indexed subtypes
+    # and also to the corresponding plain subtypes (forgetting the index).
+    OpticIs.IX_LENS: frozenset({
+        OpticIs.IX_LENS, OpticIs.IX_AFFINE_TRAVERSAL, OpticIs.IX_TRAVERSAL,
+        OpticIs.IX_GETTER, OpticIs.IX_AFFINE_FOLD, OpticIs.IX_FOLD, OpticIs.IX_SETTER,
+        OpticIs.LENS, OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.GETTER, OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.IX_PRISM: frozenset({
+        OpticIs.IX_PRISM, OpticIs.IX_AFFINE_TRAVERSAL, OpticIs.IX_TRAVERSAL,
+        OpticIs.IX_AFFINE_FOLD, OpticIs.IX_FOLD, OpticIs.IX_SETTER,
+        OpticIs.PRISM, OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.IX_AFFINE_TRAVERSAL: frozenset({
+        OpticIs.IX_AFFINE_TRAVERSAL, OpticIs.IX_TRAVERSAL,
+        OpticIs.IX_AFFINE_FOLD, OpticIs.IX_FOLD, OpticIs.IX_SETTER,
+        OpticIs.AFFINE_TRAVERSAL, OpticIs.TRAVERSAL,
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.IX_TRAVERSAL: frozenset({
+        OpticIs.IX_TRAVERSAL, OpticIs.IX_FOLD, OpticIs.IX_SETTER,
+        OpticIs.TRAVERSAL, OpticIs.FOLD, OpticIs.SETTER,
+    }),
+    OpticIs.IX_GETTER: frozenset({
+        OpticIs.IX_GETTER, OpticIs.IX_AFFINE_FOLD, OpticIs.IX_FOLD,
+        OpticIs.GETTER, OpticIs.AFFINE_FOLD, OpticIs.FOLD,
+    }),
+    OpticIs.IX_AFFINE_FOLD: frozenset({
+        OpticIs.IX_AFFINE_FOLD, OpticIs.IX_FOLD,
+        OpticIs.AFFINE_FOLD, OpticIs.FOLD,
+    }),
+    OpticIs.IX_FOLD: frozenset({
+        OpticIs.IX_FOLD,
+        OpticIs.FOLD,
+    }),
+    OpticIs.IX_SETTER: frozenset({
+        OpticIs.IX_SETTER,
+        OpticIs.SETTER,
+    }),
 }
 
 def cast_optic_is(opt_from: OpticIs, opt_to: OpticIs) -> OpticIs:
