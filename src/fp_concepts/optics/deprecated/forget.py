@@ -16,7 +16,7 @@ from ..either      import either_, Left, Right
 from ..maybe       import Nothing
 from ..monoids     import Monoid
 from ..functions   import Function, compose, const, fst, snd
-from ..utils       import MissingMonoid, eff
+from ..utils       import MissingMonoid, effn
 
 from .choice       import Choice
 from .cochoice     import Cochoice
@@ -82,12 +82,12 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
 
     def wander(self, f):   # wander : Applicative f => (a -> f b) -> (s -> f t)
         cls = type_const(self._monoid)
-        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
+        g = effn(make_const(self._monoid), self._a_to_r, effect=cls)
         return Forget(compose(run_const, f(g)), self._monoid)
 
     def visit(self, f):
         cls = type_const(self._monoid)
-        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
+        g = effn(make_const(self._monoid), self._a_to_r, effect=cls)
         pure = Const(self._monoid.munit, self._monoid).pure  # Could use as is, but use the function
         return Forget(compose(run_const, lambda s: f(pure, g, s)), self._monoid)
 

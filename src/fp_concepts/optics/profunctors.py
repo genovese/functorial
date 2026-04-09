@@ -1,4 +1,14 @@
-"""Concrete profunctors for use in optics methods.
+"""Concrete profunctors used to implement optics methods.
+
+This is the key trick to the entire (sub-)library. Optics are
+functions mapping p a b -> p s t for profunctors p (with various
+possible constraints) and types a b s t. They work for *any*
+suitable profunctor, so to create the optics methods, we simply need
+a well-chosen, *concrete* profunctor.
+
+The profunctors in this module (along with a few others, like Tagged
+in review.py) serve this purpose. For instance, Forget is used for
+Getters and Star for Setters.
 
 """
 from __future__    import annotations
@@ -14,12 +24,15 @@ from ..maybe       import Nothing
 from ..monoids     import Monoid
 from ..pair        import Pair
 from ..functions   import Function, compose, const, fst, snd
-from ..utils       import MissingMonoid, eff
+from ..utils       import MissingMonoid, effn
+
+from ..wrappers    import EffectfulFunction
 
 from .choice       import Choice
 from .cochoice     import Cochoice
 from .costrong     import Costrong
 from .strong       import Strong
+from .optic        import _pack_index
 
 __all__ = ['Forget', 'ForgetM', 'IndexedForget', 'Indexed', 'IndexedStar', 'Star', 'Costar']
 
@@ -27,7 +40,7 @@ __all__ = ['Forget', 'ForgetM', 'IndexedForget', 'Indexed', 'IndexedStar', 'Star
 #
 # Forget is a profunctor whose second argument is a phantom type (ignored)
 #
-# newtype Forget r a b = Forget { runForget :: a -> r }
+# newtype Forget r a b = Forget { runForget : a -> r }
 #
 # This is isomorphic to Star (Const r) but arises enough that it is
 # worth having a name for it.
@@ -35,14 +48,14 @@ __all__ = ['Forget', 'ForgetM', 'IndexedForget', 'Indexed', 'IndexedStar', 'Star
 class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
     """A profunctor representing a mapping to a fixed type.
 
-    The second type argument is a phantom type (i.e., ignored).
+    The second type argument is a phantom type, i.e., ignored.
 
-    newtype Forget r a b = Forget { runForget :: a -> r }
+      newtype Forget r a b = Forget { runForget : a -> r }
 
     This is isomorphic to Star (Const r) but arises enough that it is
-    worth having a name for it.
+    worth having a distinct name/class for it.
 
-    We extract the enclosed function with Forget.run.
+    Use Forget.run to extract the enclosed function.
 
     To act as a Choice, this needs a default argument supplied at
     construction. This also needs a Monoid interpretation of r for
@@ -91,19 +104,45 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
 
     def wander(self, f):   # wander : Applicative f => (a -> f b) -> (s -> f t)
         cls = type_const(self._monoid)
-        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
+        g = effn(make_const(self._monoid), self._a_to_r, effect=cls)
         return Forget(compose(run_const, f(g)), self._monoid)
 
     def visit(self, f):
         cls = type_const(self._monoid)
-        g = eff(make_const(self._monoid), self._a_to_r, effect=cls)
+        g = effn(make_const(self._monoid), self._a_to_r, effect=cls)
         pure = Const(self._monoid.munit, self._monoid).pure  # Could use as is, but use the function
         return Forget(compose(run_const, lambda s: f(pure, g, s)), self._monoid)
+
+    def iwander(self, f):
+        """Applies an indexed VL traversal function, ignoring the index.
+
+        f : (i -> a -> g b) -> s -> g t  for any Applicative g
+        """
+        h, m = self._a_to_r, self._monoid
+        cls_c = type_const(m)
+
+        def go(s):
+            ig = EffectfulFunction(lambda _ix, a: Const(h(a), m), cls_c)
+            return run_const(f(ig)(s))
+
+        return Forget(go, m)
+
+    def ifold_vl(self, f):
+        """Applies an indexed fold VL function, ignoring the index.
+
+        f : (i -> a -> r, Monoid r) -> s -> r
+        """
+        h, m = self._a_to_r, self._monoid
+
+        def go(s):
+            return f(lambda _ix, a: h(a), m)(s)
+
+        return Forget(go, m)
 
 #
 # IndexedForget is the indexed analogue of Forget, for iview/icollect/ifold_map_of.
 #
-# newtype IndexedForget i r a b = IndexedForget { runIndexedForget :: i -> a -> r }
+# newtype IndexedForget i r a b = IndexedForget { runIndexedForget : i -> a -> r }
 #
 # Like Forget, the second type argument b is a phantom type (ignored in dimap).
 # Unlike Forget, it carries an index i that threads through indexed optic chains
@@ -113,7 +152,7 @@ class Forget[R, A](Strong, Cochoice, Choice, Bicofunctor):
 class IndexedForget[I, R, A]:
     """An indexed profunctor for reading actions: wraps i -> a -> r.
 
-    newtype IndexedForget i r a b = IndexedForget { runIndexedForget :: i -> a -> r }
+    newtype IndexedForget i r a b = IndexedForget { runIndexedForget : i -> a -> r }
 
     The type argument b is a phantom (ignored). This is the canonical
     profunctor for iview, icollect, and ifold_map_of — the indexed
@@ -166,13 +205,39 @@ class IndexedForget[I, R, A]:
             lambda i, ca: either_(const(m.munit), lambda a: f(i, a))(ca), m
         )
 
+    def iwander(self, f):
+        """Applies an indexed VL traversal function with index accumulation.
+
+        f : (i -> a -> g b) -> s -> g t  for any Applicative g
+        """
+        h, m = self._f, self._monoid
+        cls_c = type_const(m)
+
+        def go(i_acc, s):
+            ig = EffectfulFunction(lambda ix, a: Const(h(_pack_index(i_acc, ix), a), m), cls_c)
+            return run_const(f(ig)(s))
+
+        return IndexedForget(go, m)
+
+    def ifold_vl(self, f):
+        """Applies an indexed fold VL function with index accumulation.
+
+        f : (i -> a -> r, Monoid r) -> s -> r
+        """
+        h, m = self._f, self._monoid
+
+        def go(i_acc, s):
+            return f(lambda ix, a: h(_pack_index(i_acc, ix), a), m)(s)
+
+        return IndexedForget(go, m)
+
 
 class ForgetM[R, A](Strong, Cochoice, Choice, Bicofunctor):
     """A profunctor representing a mapping to a fixed type.
 
     The second type argument is a phantom type (i.e., ignored).
 
-    newtype ForgetM r a b = ForgetM { runForgetM :: a -> Maybe r }
+    newtype ForgetM r a b = ForgetM { runForgetM : a -> Maybe r }
 
     This is isomorphic to Star (Const r) but arises enough that it is
     worth having a name for it.
@@ -235,7 +300,7 @@ class ForgetM[R, A](Strong, Cochoice, Choice, Bicofunctor):
 #
 # Indexed is a profunctor wrapping i -> a -> b.
 #
-# newtype Indexed i a b = Indexed { runIndexed :: i -> a -> b }
+# newtype Indexed i a b = Indexed { runIndexed : i -> a -> b }
 #
 # An indexed profunctor carries an index i alongside each value of type a.
 # It threads through indexed optic composition via pair accumulation:
@@ -251,7 +316,7 @@ class Indexed[I, A, B](Strong, Choice):
     Indexed i a b represents a profunctor where each value of type a is
     paired with an index of type i, producing a result of type b.
 
-    newtype Indexed i a b = Indexed { runIndexed :: i -> a -> b }
+    newtype Indexed i a b = Indexed { runIndexed : i -> a -> b }
 
     When composing two indexed optics (indices I and J), the indices
     accumulate as pairs (I, J) via reindex. The Strong and Choice
@@ -310,11 +375,24 @@ class Indexed[I, A, B](Strong, Choice):
         f = self._f
         return Indexed(lambda j, a: f(g(j), a))
 
+    def iwander(self, f):
+        """Applies an indexed VL traversal function using Identity as the Applicative.
+
+        f : (i -> a -> g b) -> s -> g t  for any Applicative g
+        """
+        g = self._f
+
+        def go(i_acc, s):
+            ig = EffectfulFunction(lambda ix, a: Identity(g(_pack_index(i_acc, ix), a)), Identity)
+            return Identity.run(f(ig)(s))
+
+        return Indexed(go)
+
 
 #
 # IndexedStar is the indexed analogue of Star, for itraverse_of / effectful traversal.
 #
-# newtype IndexedStar i f a b = IndexedStar { runIndexedStar :: i -> a -> f b }
+# newtype IndexedStar i f a b = IndexedStar { runIndexedStar : i -> a -> f b }
 #
 # Like Star, it carries an effect class (for pure/Applicative operations).
 # Like Indexed, it threads an accumulated index i through optic chains.
@@ -323,7 +401,7 @@ class Indexed[I, A, B](Strong, Choice):
 class IndexedStar[I, A, B](Strong, Choice):
     """Indexed profunctor for effectful traversal actions: wraps i -> a -> f b.
 
-    newtype IndexedStar i f a b = IndexedStar { runIndexedStar :: i -> a -> f b }
+    newtype IndexedStar i f a b = IndexedStar { runIndexedStar : i -> a -> f b }
 
     The canonical profunctor for itraverse_of.  Like Star, requires
     Functor f for Strong and Applicative f for Choice and wander.
@@ -348,6 +426,7 @@ class IndexedStar[I, A, B](Strong, Choice):
 
     def into_first(self):
         f, eff = self._f, self._effect
+
         def k(i, ac):
             a, c = ac
             return map(lambda b: Pair(b, c), f(i, a))
@@ -355,6 +434,7 @@ class IndexedStar[I, A, B](Strong, Choice):
 
     def into_second(self):
         f, eff = self._f, self._effect
+
         def k(i, ca):
             c, a = ca
             return map(lambda b: Pair(c, b), f(i, a))
@@ -364,21 +444,35 @@ class IndexedStar[I, A, B](Strong, Choice):
 
     def into_left(self):
         f, eff = self._f, self._effect
+
         def k(i, ac):
             return either_(compose(lift(Left), f(i)), compose(eff.pure, Right))(ac)
         return IndexedStar(k, eff)
 
     def into_right(self):
         f, eff = self._f, self._effect
+
         def k(i, ca):
             return either_(compose(eff.pure, Left), compose(lift(Right), f(i)))(ca)
         return IndexedStar(k, eff)
+
+    def iwander(self, f):
+        """Applies an indexed VL traversal function with indexed effectful function.
+
+        f : (i -> a -> g b) -> s -> g t  for any Applicative g
+        """
+        g, eff = self._f, self._effect
+
+        def go(i_acc, s):
+            ig = EffectfulFunction(lambda ix, a: g(_pack_index(i_acc, ix), a), eff)
+            return f(ig)(s)
+        return IndexedStar(go, eff)
 
 
 #
 # Star is a profunctor that lifts an arrow a -> f b into a profunctor.
 #
-# newtype Star f a b = Star { runStar :: a -> f b }
+# newtype Star f a b = Star { runStar : a -> f b }
 #
 # This is the canonical profunctor for Traversal and AffineTraversal
 # optics. The Strong instance requires only that f be a Functor, but
@@ -388,7 +482,7 @@ class IndexedStar[I, A, B](Strong, Choice):
 class Star[A, B](Strong, Choice):
     """Profunctor lifted from a function a -> f b for a Functor/Applicative f.
 
-    newtype Star f a b = Star { runStar :: a -> f b }
+    newtype Star f a b = Star { runStar : a -> f b }
 
     This is the canonical profunctor for Traversal (via wander) and
     AffineTraversal (via visit) optics.
@@ -455,7 +549,8 @@ class Star[A, B](Strong, Choice):
         g : Applicative f => (a -> f b) -> (s -> f t)
 
         """
-        return Star(g(self._fn), self._functor)
+        fn = EffectfulFunction(self._fn, self._functor)
+        return Star(g(fn), self._functor)
 
     def visit(self, g):
         """Converts a VL affine traversal into a Star profunctor.
@@ -467,11 +562,23 @@ class Star[A, B](Strong, Choice):
         """
         return Star(lambda s: g(self._functor.pure, self._fn, s), self._functor)
 
+    def iwander(self, f):
+        """Applies an indexed VL traversal function, ignoring the index.
+
+        f : (i -> a -> g b) -> s -> g t  for any Applicative g
+        """
+        g, eff = self._fn, self._functor
+
+        def go(s):
+            ig = EffectfulFunction(lambda _ix, a: g(a), eff)
+            return f(ig)(s)
+        return Star(go, eff)
+
 
 #
 # Costar is the dual profunctor, lowering f a -> b into a profunctor.
 #
-# newtype Costar f a b = Costar { runCostar :: f a -> b }
+# newtype Costar f a b = Costar { runCostar : f a -> b }
 #
 # This is the right adjoint to Star. Its primary uses are:
 #   - Grate optics (via the closed method, which requires Distributive f)
@@ -485,7 +592,7 @@ class Star[A, B](Strong, Choice):
 class Costar[F, A, B](Costrong):
     """Profunctor lowering a function f a -> b for a Functor f.
 
-    newtype Costar f a b = Costar { runCostar :: f a -> b }
+    newtype Costar f a b = Costar { runCostar : f a -> b }
 
     This is the right adjoint to Star (the dual Kleisli construction).
 
@@ -513,8 +620,8 @@ class Costar[F, A, B](Costrong):
 
     # Costrong: requires Comonad f (extract + extend)
     #
-    # unfirst  :: Costar f (a, c) (b, c) -> Costar f a b
-    # unsecond :: Costar f (c, a) (c, b) -> Costar f a b
+    # unfirst  : Costar f (a, c) (b, c) -> Costar f a b
+    # unsecond : Costar f (c, a) (c, b) -> Costar f a b
     #
     # Haskell:
     #   unfirst (Costar k) = Costar $ fst . k . extend (\w -> (extract w, ???))
@@ -536,6 +643,7 @@ class Costar[F, A, B](Costrong):
         def k(fa):
             extended = f.extend(lambda w: Pair(f.extract(w), _phantom), fa)
             return fst(fn(extended))
+
         return Costar(k, f)
 
     def unsecond(self):
@@ -550,20 +658,21 @@ class Costar[F, A, B](Costrong):
         def k(fa):
             extended = f.extend(lambda w: Pair(_phantom, f.extract(w)), fa)
             return snd(fn(extended))
+
         return Costar(k, f)
 
     # Closed: for Grate optics, requires Distributive f
     #
-    # closed :: Costar f a b -> Costar f (x -> a) (x -> b)
+    # closed : Costar f a b -> Costar f (x -> a) (x -> b)
     # closed (Costar f) = Costar $ \g x -> f (fmap ($ x) g)
     #
-    # Here g : f [x -> a] and we produce x -> b by applying each (x -> a) to x
+    # Here g : f (x -> a) and we produce x -> b by applying each (x -> a) to x
     # via fmap, yielding f a, then feeding that into f.
     # This uses only fmap and works when f distributes over functions.
 
     def closed(self):
         fn = self._fn
 
-        def k(g):              # g :: F[x -> a]
-            return lambda x: fn(map(lambda h: h(x), g))  # fmap ($ x) g :: F[a]
+        def k(g):              # g : f (x -> a)
+            return lambda x: fn(map(lambda h: h(x), g))  # fmap ($ x) g : F[a]
         return Costar(k, self._functor)

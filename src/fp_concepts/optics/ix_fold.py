@@ -9,24 +9,31 @@ IxLens: the outermost action passes _MISSING as the initial accumulator;
 each optic in a chain packs its own index into it, yielding a left-nested
 pair for a chain of length > 1.
 
-Dispatch:
+Dispatch is handled through the profunctor's ifold_vl method, which takes
+an indexed fold VL function:
+
+  f : Monoid r => (i -> a -> r, r) -> s -> r
+
+This uses two principal concrete profunctors, with the second used
+when the index is ignored:
+
   * IndexedForget  — indexed reading actions (ifold_map_of, icollect, ...)
   * Forget         — plain reading actions after cast_as(FOLD)  (collect, ...)
 
 """
 
-from __future__  import annotations
+from __future__   import annotations
 
-from typing      import Callable
+from typing       import Callable
 
-from ..foldable  import IndexedFoldable
-from ..functions import Function, compose, fn_eval, identity
-from ..list      import List
-from ..monoids   import Endo, Monoid
-from ..utils     import Collect
+from ..functions  import Function, fn_eval, identity
+from ..list       import List
+from ..monoids    import Endo, Monoid
+from ..utils      import Collect
 
-from .optic       import Optic, OpticIs, _MISSING, _pack_index
-from .profunctors import Forget, IndexedForget
+from .optic       import Optic, OpticIs, _MISSING
+from .profunctors import IndexedForget
+from .generics    import ifold_vl_
 
 __all__ = [
     'IxFold',
@@ -41,13 +48,13 @@ __all__ = [
 
 
 class IxFold(Optic, optic_is=OpticIs.IX_FOLD):
-    """A read-only indexed optic extracting zero or more indexed foci."""
+    """A read-only indexed optic extracting zero or more indexed result."""
     def __init__(self, f, opt_type=None):
         super().__init__(f, opt_type if opt_type is not None else OpticIs.IX_FOLD)
 
 
 class IxAffineFold(Optic, optic_is=OpticIs.IX_AFFINE_FOLD):
-    """A read-only indexed optic extracting at most one indexed focus."""
+    """A read-only indexed optic extracting at most one indexed result."""
     def __init__(self, f, opt_type=None):
         super().__init__(f, opt_type if opt_type is not None else OpticIs.IX_AFFINE_FOLD)
 
@@ -59,56 +66,21 @@ class IxAffineFold(Optic, optic_is=OpticIs.IX_AFFINE_FOLD):
 # rather than plain Foldable.  The structure's intrinsic indices are the optic's
 # indices.
 #
-# Dispatches on the profunctor:
-#   IndexedForget  -> uses s.ifold_map directly with index accumulation
-#   Forget         -> uses s.ifold_map forgetting the index (cast_as(FOLD) path)
+# Each profunctor receives the fold VL function via p.ifold_vl(f), where
+# f calls the container's ifold_map.  IndexedForget accumulates indices;
+# Forget ignores them.
 #
 
-def _ifolded_fn(p):
-    """Core dispatch for ifolded."""
-    if isinstance(p, IndexedForget):
-        f = IndexedForget.run(p)     # i_acc -> a -> r
-        m = p._monoid                # pylint: disable=protected-access
-        def fold_s(i_acc, s):
-            return s.ifold_map(lambda ix, a: f(_pack_index(i_acc, ix), a), m)
-        return IndexedForget(fold_s, m)
-
-    if isinstance(p, Forget):
-        f = Forget.run(p)
-        m = p._monoid                # pylint: disable=protected-access
-        return Forget(lambda s: s.ifold_map(lambda _ix, a: f(a), m), m)
-
-    raise TypeError(
-        f'ifolded: unsupported profunctor {type(p).__name__!r}; '
-        f'use folded for plain Foldable structures'
-    )
-
-
-ifolded = IxFold(_ifolded_fn)
-
+ifolded = IxFold(ifold_vl_(lambda ig, m: lambda s: s.ifold_map(ig, m)))
+ifolded.__doc__ = """Indexed fold over all elements of any IndexedFoldable container."""
 
 def ifolding(f: Callable) -> IxFold:
     """Builds an IxFold from a function s -> IndexedFoldable i a.
 
-    ifolding :: IndexedFoldable f => (s -> f i a) -> IxFold i s a
+    ifolding : IndexedFoldable f => (s -> f i a) -> IxFold i s a
 
     """
-    def the_fold(p):
-        if isinstance(p, IndexedForget):
-            g = IndexedForget.run(p)
-            m = p._monoid            # pylint: disable=protected-access
-            def fold_s(i_acc, s):
-                return f(s).ifold_map(lambda ix, a: g(_pack_index(i_acc, ix), a), m)
-            return IndexedForget(fold_s, m)
-
-        if isinstance(p, Forget):
-            g = Forget.run(p)
-            m = p._monoid            # pylint: disable=protected-access
-            return Forget(lambda s: f(s).ifold_map(lambda _ix, a: g(a), m), m)
-
-        raise TypeError(f'ifolding: unsupported profunctor {type(p).__name__!r}')
-
-    return IxFold(the_fold)
+    return IxFold(ifold_vl_(lambda ig, m: lambda s: f(s).ifold_map(ig, m)))
 
 
 #
@@ -118,43 +90,44 @@ def ifolding(f: Callable) -> IxFold:
 def ifold_map_of(optic, f: Callable, monoid: Monoid = Collect) -> Function:
     """Maps each (index, focus) pair to a monoid value and combines them.
 
-    ifold_map_of :: IxFold i s a -> (i -> a -> m) -> s -> m
+    ifold_map_of : IxFold i s a -> (i -> a -> m) -> s -> m
 
     """
     p = IndexedForget(f, monoid)
     optic_f = optic.cast_as(OpticIs.IX_FOLD)
-    g = IndexedForget.run(optic_f(p))    # i_acc -> s -> m
+    # g: i_acc -> s -> m
+    g = IndexedForget.run(optic_f(p))    # type: ignore
     return Function(lambda s: g(_MISSING, s))
-
 
 def icollect(optic) -> Function:
     """Collects all (index, focus) pairs into a list.
 
-    icollect :: IxFold i s a -> s -> [(i, a)]
+    icollect : IxFold i s a -> s -> List (i, a)
 
     """
     return ifold_map_of(optic, lambda i, a: List.of((i, a)), Collect)
 
-
 def iright_fold_of(optic, f: Callable, init) -> Function:
     """Right fold over indexed foci using an accumulating function.
 
-    iright_fold_of :: IxFold i s a -> (i -> a -> r -> r) -> r -> s -> r
+    iright_fold_of : IxFold i s a -> (i -> a -> r -> r) -> r -> s -> r
 
     """
-    reduce = lambda i, a: lambda r: f(i, a, r)
-    return Function(lambda s: fn_eval(s >> ifold_map_of(optic, reduce, Endo), init))
+    def reduce(i, a):
+        return lambda r: f(i, a, r)
 
+    return Function(lambda s: fn_eval(s >> ifold_map_of(optic, reduce, Endo), init))
 
 def ileft_fold_of(optic, f: Callable, init) -> Function:
     """Left fold over indexed foci using an accumulating function.
 
-    ileft_fold_of :: IxFold i s a -> (r -> i -> a -> r) -> r -> s -> r
+    ileft_fold_of : IxFold i s a -> (r -> i -> a -> r) -> r -> s -> r
 
     Derived from iright_fold_of via the difference-list technique; correct
     but O(n) in stack depth. Override for strict efficiency if needed.
 
     """
-    def reduce(i, a, cont):          # cont :: r -> r  (difference-list continuation)
+    def reduce(i, a, cont):          # cont : r -> r  (difference-list continuation)
         return lambda r: cont(f(r, i, a))
+
     return Function(lambda s: (s >> iright_fold_of(optic, reduce, identity))(init))

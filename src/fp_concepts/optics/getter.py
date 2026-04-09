@@ -29,24 +29,20 @@ class Getter(Optic, optic_is=OpticIs.GETTER):
     def __init__(self, f, opt_type=None):
         super().__init__(f, opt_type if opt_type is not None else OpticIs.GETTER)
 
-
 idF: Forget = Forget(identity)
-
 
 def view(optic) -> Function:
     """Returns the single focus of a Getter as a function s -> a."""
     return Forget.run(optic(idF))
 
-
 def view_with(optic, f=identity) -> Function:
     """Returns the focus of a Getter transformed by f, as a function s -> b."""
     return Forget.run(optic(Forget(f)))
 
-
 def getter[S, A](f: Callable[[S], A]) -> Getter:
     """Builds a Getter from a function mapping structure to focus.
 
-    getter :: (s -> a) -> Getter s a
+    getter : (s -> a) -> Getter s a
 
     """
     return Getter(dilift(Function(f), cast(Callable[[A], S], absurd)))

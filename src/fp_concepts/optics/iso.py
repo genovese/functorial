@@ -1,4 +1,4 @@
-"""Iso -- the family of optics that represent an isomorphism.
+"""Iso -- the family of optics that represent invertible transformations.
 
 An Iso s t a b represents a reversible transformation: s <-> a and b <-> t.
 It is the most specific optic and can be used as any other optic type,
@@ -62,7 +62,6 @@ def iso(sa: Callable, bt: Callable) -> Iso:
     """
     return Iso(dilift(Function(sa), Function(bt)))
 
-
 def from_(the_iso: Iso) -> Iso:
     """Reverses an Iso, swapping source/target and forward/backward.
 
@@ -74,34 +73,35 @@ def from_(the_iso: Iso) -> Iso:
     """
     return Iso(re(the_iso))
 
-
 def involuted(f: Callable) -> Iso:
-    """Build an Iso from a self-inverse function (f . f = id).
+    """Builds an Iso from a self-inverse function (f . f = id).
 
-    involuted :: (a -> a) -> Iso a a a a
+    involuted : (a -> a) -> Iso a a a a
 
-    Example: involuted(lambda x: -x)   — negation is its own inverse
-             involuted(sorted)          — only valid if sort is idempotent
+    Examples:
+      - involuted(lambda x: -x)   — negation is its own inverse
+      - involuted(sorted)         — only valid if sort is idempotent
+
     """
     return iso(f, f)
-
 
 def non(default) -> Iso:
     """Creates an Iso between Maybe a and a, using a default value for Nothing.
 
-    non :: Eq a => a -> Iso (Maybe a) (Maybe a) a a
+    non : Eq a => a -> Iso (Maybe a) (Maybe a) a a
 
-    view  (non d) (Some a) = a
-    view  (non d) Nothing  = d
-    review (non d) a       = Nothing if a == default else Some(a)
+    Laws:
+      - view  (non d) (Some a) == a
+      - view  (non d) Nothing  == d
+      - review (non d) a       == Nothing if a == default else Some(a)
 
     Useful for working with optional dictionary values as if they
     were always present.
+
     """
     forward = lambda ma: maybe(default, identity, ma)
     backward = lambda a:  Nothing() if a == default else Some(a)
     return iso(forward, backward)
-
 
 def coerced(forward: Callable, backward: Callable) -> Iso:
     """Builds an Iso from explicit coercion functions (alias for iso).
@@ -112,13 +112,11 @@ def coerced(forward: Callable, backward: Callable) -> Iso:
     """
     return iso(forward, backward)
 
-
 negated: Iso = involuted(lambda x: -x)
-"""Iso negating a number; self-inverse since -(-x) = x."""
+negated.__doc__ = """Iso negating a number; self-inverse since -(-x) = x."""
 
 swapped: Iso = involuted(lambda p: (p[1], p[0]))
-"""Iso swapping the two components of a pair; self-inverse."""
-
+swapped.__doc__ = """Iso swapping the two components of a pair; self-inverse."""
 
 def _flip_either(e):
     match e:
@@ -126,4 +124,4 @@ def _flip_either(e):
         case Right(b): return Left(b)
 
 flipped: Iso = involuted(_flip_either)
-"""Iso swapping Left and Right in an Either; self-inverse."""
+flipped.__doc__ = """Iso swapping Left and Right in an Either; self-inverse."""

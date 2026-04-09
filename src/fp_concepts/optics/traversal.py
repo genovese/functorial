@@ -3,19 +3,21 @@
 A Traversal s t a b focuses on zero or more elements of type a inside
 an s, allowing effectful reads and pure modifications.
 
-  type Traversal s t a b = forall p. wander p => p a b -> p s t
+  type Traversal s t a b = forall p. Wander p => p a b -> p s t
 
 The canonical profunctor witness is Star f for Applicative f.
 Every Lens and Prism is a Traversal.
+
 """
 
 from __future__    import annotations
 
 from typing        import Callable
 
+from ..applicative import Applicative
 from ..pair        import Pair
-from ..functions   import compose
 from ..traversable import traverse_
+from ..wrappers    import EffectfulFunction
 
 from .generics     import wander_
 from .optic        import Optic, OpticIs
@@ -40,21 +42,39 @@ class Traversal(Optic, optic_is=OpticIs.TRAVERSAL):
 
 
 def traversal(f: Callable) -> Traversal:
-    """Build a Traversal from a van Laarhoven traversal function.
+    """Builds a Traversal from a van Laarhoven traversal function.
 
-    f :: Applicative g => (a -> g b) -> s -> g t
+    Parameters
+    ----------
+    - f : Applicative g => (a -> g b) -> s -> g t
+
     """
     return Traversal(wander_(f))
 
 
-def traverse_of(optic, effect, f: Callable) -> Callable:
-    """Run an effectful function over all foci; returns s -> f t.
+def traverse_of(optic, fn: Callable, effect: type[Applicative] | None = None) -> Callable:
+    """Applies an effectful function to each element of a structure
+    targeted by a Traversal, evaluates these actions from left to
+    right, and collects the results.
 
-    traverse_of :: Applicative f => Traversal -> type[f] -> (a -> f b) -> (s -> f t)
+    If fn is an EffectfulFunction, the corresponding effect type f
+    is used, otherwise an Applicative type f should be provided in
+    the effect argument. Raises an exception if the effect type
+    cannot be determined.
 
-    The effect class is passed explicitly because Python cannot infer it.
+    Returns a function s -> f t to be applied to traversable structure s.
+
+    traverse_of : Applicative f => Traversal -> EffectfulFunction a (f b) -> (s -> f t)
+                  Applicative f => Traversal -> (a -> f b) -> Type f -> (s -> f t)
+
     """
-    s = Star(f, effect)
+    if isinstance(fn, EffectfulFunction):
+        effect = fn.effect
+    elif effect is None:
+        raise ValueError('Cannot determine effect type in traverse_of, '
+                         'supply effect argument or EffectfulFunction.')
+
+    s = Star(fn, effect)
     return Star.run(optic(s))
 
 
@@ -67,7 +87,7 @@ def _both_vl(f):
 
 
 both = traversal(_both_vl)
-"""Traversal over both elements of a 2-tuple or Pair."""
+both.__doc__ = """Traversal over both elements of a 2-tuple or Pair."""
 
 each = traversal(traverse_)
-"""Traversal over all elements of any Traversable container."""
+each.__doc__ = """Traversal over all elements of any Traversable container."""

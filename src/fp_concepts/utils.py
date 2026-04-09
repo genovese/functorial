@@ -14,7 +14,7 @@ from .functions   import compose
 from .wrappers    import EffectfulFunction
 
 __all__ = [
-    'MissingMonoid', 'Free', 'Collect', 'CollectMaybe', 'eff',
+    'MissingMonoid', 'Free', 'Collect', 'CollectMaybe', 'effn',
 ]
 
 
@@ -97,7 +97,7 @@ class CollectMaybeM(Monoid):
 CollectMaybe = CollectMaybeM()
 
 
-def eff(f, *fs, effect=Identity) -> EffectfulFunction:
+def effn(f, *fs, effect=Identity) -> EffectfulFunction:
     """Tags and returns a function of type a -> f b with its Applicative class.
 
     Parameters
@@ -105,7 +105,7 @@ def eff(f, *fs, effect=Identity) -> EffectfulFunction:
     f - Either a function returning an object that is an instance of Applicative
         or an applicative type constructor. In the former case,
         f has type a -> e b for some applicative functor e equal to that
-        given in effect..
+        given in effect.
 
     fs - a sequence of functions that are composed with f, with f being
         last in the sequence. This is optional.
@@ -119,11 +119,11 @@ def eff(f, *fs, effect=Identity) -> EffectfulFunction:
 
     Examples:
 
-    + eff(f, g, h, effect=Const)
+    + effn(f, g, h, effect=Const)
 
       Returns f . g . h, where f : a -> Const b
 
-    + eff(Identity, f)
+    + effn(Identity, f)
 
       Returns Identity . f and tagged with Identity
 

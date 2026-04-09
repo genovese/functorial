@@ -1,3 +1,18 @@
+"""A lens is an optic that represents a generalized field in a structure that can be read and written.
+
+A lens has a single focus that can be viewed or updated. Throughout
+we use type variables a, b, s, and t to describe optics, where
+
+ + a is the type of a "focus" within a structure (e.g., a field of a record, or element of an array)
+ + b is the type of a "focus" after a potential transformation
+ + s is the type of a structure itself
+ + t is the type of an updated structure after transformation of zero or more foci
+
+The canoncial construction of a lens is based on two functions, one
+to view the current focus (s -> a) and one to update the focus (s -> b -> t).
+
+"""
+
 from __future__   import annotations
 
 from collections.abc import MutableSequence, Sequence
@@ -27,6 +42,7 @@ __all__ = [
 
 
 class Lens[A, B, S, T](Optic, optic_is=OpticIs.LENS):
+    """An optic with exactly one focus that can be viewed or updated."""
     def __init__(self, sab_to_sst: Callable[[Strong[A, B]], Strong[S, T]], opt_type=None):
         self._sab_to_sst: Callable[[Strong[A, B]], Strong[S, T]] = sab_to_sst
         super().__init__(sab_to_sst, opt_type if opt_type is not None else OpticIs.LENS)
@@ -34,7 +50,8 @@ class Lens[A, B, S, T](Optic, optic_is=OpticIs.LENS):
 def lens[A, B, S, T](
         getter: Callable[[S], A],
         setter: Callable[[S, B], T]
-) -> Optic:
+) -> Lens[A, B, S, T]:
+    """Constructs a lens from a getter/view function and a setter/update function."""
     def the_lens(p_ab: Strong[A, B]) -> Strong[S, T]:
         p_ac_bc: Strong[tuple[A, S], tuple[B, S]] = p_ab.into_first()
         p = p_ac_bc.dimap(lambda s: (getter(s), s),
@@ -136,8 +153,9 @@ def at(*idx: int | slice):
 def alongside(l, r) -> Lens:
     """Lens running two lenses in parallel on the two halves of a pair.
 
-    alongside :: Lens s t a b -> Lens s' t' a' b'
-               -> Lens (s, s') (t, t') (a, a') (b, b')
+    alongside : Lens s t a b
+              -> Lens s' t' a' b'
+              -> Lens (s, s') (t, t') (a, a') (b, b')
 
     view  (alongside l r) (s, s') = (view l s,  view r s')
     over  (alongside l r) f (s, s') = (over l (fst . f) s, over r (snd . f) s')

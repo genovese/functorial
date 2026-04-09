@@ -4,7 +4,7 @@ An AffineTraversal s t a b focuses on zero or one element inside s,
 combining the optionality of Prism with the contextual update of Lens.
 
   type AffineTraversal s t a b =
-    forall p. (Strong p, Choice p, visit p) => p a b -> p s t
+    forall p. (Strong p, Choice p, Visit p) => p a b -> p s t
 
 Common cases:
   + Every Lens is an AffineTraversal (always has a focus).
@@ -72,7 +72,7 @@ def affine_traversal_vl(
     Example:  first element of a non-empty list:
         affine_traversal_vl(
             lambda s: Right(s[0]) if s else Left(s),
-            lambda s, b: [b] + s[1:]
+            lambda s, b: List.of(b) + s[1:]
         )
 
     """
@@ -88,7 +88,7 @@ def affine_traversal_vl(
 def ix(k: int) -> AffineTraversal:
     """AffineTraversal focusing on index k, with no focus if out of bounds.
 
-    ix : int -> AffineTraversal [a] [a] a a
+    ix : int -> AffineTraversal (List a) (List a) a a
 
     Unlike at (a Lens that raises on out-of-bounds), ix gracefully
     handles missing indices by having no focus.

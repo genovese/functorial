@@ -1,6 +1,6 @@
 """Re reverses a profunctor's type parameters, dualising an optic.
 
-newtype Re p s t a b = Re { runRe :: p b a -> p t s }
+newtype Re p s t a b = Re { runRe : p b a -> p t s }
 
 Instances:
   Profunctor p  => Profunctor  (Re p s t)   dimap f g (Re h) = Re (h . dimap g f)
@@ -29,7 +29,7 @@ __all__ = ['Re', 're']
 class Re[A, B](Strong, Costrong, Choice, Cochoice):
     """Profunctor transformer that reverses type parameters.
 
-    newtype Re p s t a b = Re { runRe :: p b a -> p t s }
+    newtype Re p s t a b = Re { runRe : p b a -> p t s }
 
     Re wraps a function (p b a -> p t s) and makes it act as a profunctor
     in (a, b) by delegating each method to the *dual* method on the inner

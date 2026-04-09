@@ -2,12 +2,18 @@
 """Tests for indexed optics: IxLens, IxGetter, IxFold, IxTraversal.
 
 Covers five themes:
+
   1. IxLens basics: ilens, iview, iover, iput, selfIndex, index pairing
+
   2. IxFold on List and Dict: ifolded, ifolding, ifold_map_of, icollect,
      iright_fold_of, ileft_fold_of
+
   3. IxTraversal: ieach on List, Dict, RoseTree; itraverse_of with effects
+
   4. Composition: selfIndex @ ifolded, ilens @ ieach, nested structures
-  5. Downgrade: indexed optics used as plain via cast_as
+
+  5. Downgrades: indexed optics used as plain optics via cast_as
+
 """
 
 import pytest
@@ -17,6 +23,7 @@ from fp_concepts.list        import List
 from fp_concepts.maybe       import Some, Nothing
 from fp_concepts.monoids     import Sum
 from fp_concepts.trees       import RoseTree
+from fp_concepts.wrappers    import EffectfulFunction
 
 from fp_concepts.optics.optic     import OpticIs
 from fp_concepts.optics.fold      import collect, fold_map_of
@@ -36,18 +43,20 @@ from fp_concepts.optics.ix_traversal import (
 )
 
 
-# ---------------------------------------------------------------------------
+#
 # Fixtures / shared helpers
-# ---------------------------------------------------------------------------
+#
+
+effn = EffectfulFunction
 
 # A pair lens that records 'fst' / 'snd' as indices.
-fst_ix = ilens(lambda s: ('fst', s[0]), lambda s, b: (b, s[1]))
-snd_ix = ilens(lambda s: ('snd', s[1]), lambda s, b: (s[0], b))
+fst_ix = ilens(lambda s: ('fst', s[0]), lambda s, b: (b, s[1]))  # type: ignore[index]
+snd_ix = ilens(lambda s: ('snd', s[1]), lambda s, b: (s[0], b))  # type: ignore[index]
 
 
-# ---------------------------------------------------------------------------
-# Theme 1 — IxLens basics
-# ---------------------------------------------------------------------------
+#
+# IxLens basics
+#
 
 class TestIxLens:
     def test_iview_fst(self):
@@ -104,9 +113,9 @@ class TestIxLens:
         assert iview(g)({'key': 99}) == ('key', 99)
 
 
-# ---------------------------------------------------------------------------
-# Theme 2 — IxFold on List and Dict
-# ---------------------------------------------------------------------------
+#
+# IxFold on List and Dict
+#
 
 class TestIxFold:
     def test_icollect_list(self):
@@ -162,9 +171,9 @@ class TestIxFold:
         assert set(result) == {'b', 'd'}
 
 
-# ---------------------------------------------------------------------------
-# Theme 3 — IxTraversal: ieach and itraverse_of
-# ---------------------------------------------------------------------------
+#
+# IxTraversal: ieach and itraverse_of
+#
 
 class TestIxTraversal:
     def test_ieach_icollect_list(self):
@@ -211,21 +220,34 @@ class TestIxTraversal:
     def test_itraverse_of_list_success(self):
         # Guard: allow only positive values, double them
         xs = List([1, 2, 3])
-        result = itraverse_of(ieach, Some, lambda _i, a: Some(a * 2))(xs)
+        result = itraverse_of(ieach, lambda _i, a: Some(a * 2), Some)(xs)
         assert result == Some(List([2, 4, 6]))
+
+        result2 = itraverse_of(ieach, effn(lambda _i, a: Some(a * 2), Some))(xs)
+        assert result2 == Some(List([2, 4, 6]))
+
+        with pytest.raises(ValueError):
+            itraverse_of(ieach, lambda _i, a: Some(a * 2))
 
     def test_itraverse_of_list_failure(self):
         # Negative value causes short-circuit to Nothing
         xs = List([1, -1, 3])
-        result = itraverse_of(ieach, Some, lambda _i, a: Some(a) if a > 0 else Nothing())(xs)
+        result = itraverse_of(ieach, lambda _i, a: Some(a) if a > 0 else Nothing(), Some)(xs)
         assert result == Nothing()
+
+        result2 = itraverse_of(ieach, effn(lambda _i, a: Some(a) if a > 0 else Nothing(), Some))(xs)
+        assert result2 == Nothing()
+
+        with pytest.raises(ValueError):
+            itraverse_of(ieach, lambda _i, a: Some(a) if a > 0 else Nothing())
 
     def test_itraverse_of_uses_index(self):
         # Use the index in the effect: skip element at index 1
         xs = List([10, 20, 30])
         result = itraverse_of(
-            ieach, Some,
-            lambda i, a: Nothing() if i == 1 else Some(a)
+            ieach,
+            lambda i, a: Nothing() if i == 1 else Some(a),
+            Some
         )(xs)
         assert result == Nothing()
 
@@ -256,9 +278,9 @@ class TestIxTraversal:
         assert result == (30, 70)
 
 
-# ---------------------------------------------------------------------------
-# Theme 4 — Composition
-# ---------------------------------------------------------------------------
+#
+# Composition
+#
 
 class TestComposition:
     def test_selfindex_at_ifolded(self):
@@ -315,9 +337,9 @@ class TestComposition:
         assert val_at(('snd', List([1]))) == 3
 
 
-# ---------------------------------------------------------------------------
-# Theme 5 — Downgrade: indexed optics as plain via cast_as
-# ---------------------------------------------------------------------------
+#
+# Downgrades: indexed optics as plain optics via cast_as
+#
 
 class TestDowngrade:
     def test_ixlens_cast_as_lens_view(self):

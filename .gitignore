@@ -19,3 +19,6 @@ wheels/
 .save
 # Ignore mac specific junk
 .DS_Store
+
+# Temporary Notes file
+Notes.md

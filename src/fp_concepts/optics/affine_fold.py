@@ -45,7 +45,7 @@ class AffineFold(Optic, optic_is=OpticIs.AFFINE_FOLD):
 def afold(f: Callable) -> AffineFold:
     """Build an AffineFold from a visit-style function (read-only).
 
-    f :: (forall r. r -> g r) -> (a -> g b) -> s -> g t
+    f : (forall r. r -> g r) -> (a -> g b) -> s -> g t
 
     The rphantom wrappers at both ends make the output type phantom,
     turning the traversal into a read-only fold.
@@ -63,9 +63,10 @@ def afolding(f: Callable) -> AffineFold:
 def filtered(predicate: Callable) -> AffineFold:
     """AffineFold that focuses only when the predicate holds.
 
-    filtered :: (a -> bool) -> AffineFold a a
+    filtered : (a -> bool) -> AffineFold a a
 
     preview (filtered p) x  =  Some(x) if p(x) else Nothing()
+
     """
     def fd(point, f, a):
         if predicate(a):
@@ -77,7 +78,8 @@ def filtered(predicate: Callable) -> AffineFold:
 def a_or(a: AffineFold, b: AffineFold) -> AffineFold:
     """Try the first AffineFold; if no focus, try the second.
 
-    a_or :: AffineFold s a -> AffineFold s a -> AffineFold s a
+    a_or : AffineFold s a -> AffineFold s a -> AffineFold s a
+
     """
     def alt(s):
         return maybe(preview(b)(s), Some, preview(a)(s))
@@ -85,16 +87,20 @@ def a_or(a: AffineFold, b: AffineFold) -> AffineFold:
 
 
 def has(optic, s) -> bool:
-    """Return True if the optic has a focus in s.
+    """Returns True if the optic has a focus in s.
 
-    has :: AffineFold s a -> s -> bool
+    has : AffineFold s a -> s -> bool
+
     """
     return maybe(False, lambda _: True, preview(optic)(s))
 
 
 def preview_of(optic, f: Callable) -> Callable:
-    """Extract and transform the focus if present; returns s -> Maybe b.
+    """Extracts and transforms the focus, if present, yielding a Maybe value.
 
-    preview_of :: AffineFold s a -> (a -> b) -> (s -> Maybe b)
+    Returns a function s -> Maybe b.
+
+    preview_of : AffineFold s a -> (a -> b) -> (s -> Maybe b)
+
     """
     return preview_with(optic, f)

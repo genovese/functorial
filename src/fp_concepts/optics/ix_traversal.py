@@ -4,14 +4,18 @@ An IxTraversal i s t a b focuses on zero or more values of type a inside s,
 each paired with an index of type i, and allows both effectful reads
 (itraverse_of) and pure modifications (iover).
 
-Indexed optic functions dispatch on the profunctor:
+Indexed optic functions dispatch through the profunctor's iwander method,
+which encapsulates each profunctor's handling of an indexed VL traversal
+function:
 
   * IndexedStar    — effectful traversal (itraverse_of)
   * Indexed        — pure modification (iover, iput) via Identity wrapping
   * IndexedForget  — indexed folding actions (icollect, ifold_map_of)
   * Forget         — plain folding after cast_as(FOLD)
+  * Star           — plain modification after cast_as(TRAVERSAL)
 
 Index accumulation follows the _MISSING / _pack_index convention.
+See optic.py and ix_lens.py.
 
 """
 
@@ -19,14 +23,14 @@ from __future__  import annotations
 
 from typing      import Callable
 
-from ..const     import Const, run_const, type_const
-from ..functor   import lift
-from ..functions import Function, compose
-from ..identity  import Identity
-from ..traversable import itraverse as _itraverse
+from ..applicative import Applicative
+from ..functions   import Function
+from ..traversable import itraverse_
+from ..wrappers    import EffectfulFunction
 
-from .optic       import Optic, OpticIs, _MISSING, _pack_index
-from .profunctors import Forget, IndexedForget, Indexed, IndexedStar, Star
+from .optic       import Optic, OpticIs, _MISSING
+from .profunctors import IndexedStar
+from .generics    import iwander_
 from .ix_lens     import iover, iput          # re-export
 
 __all__ = [
@@ -55,133 +59,70 @@ class IxAffineTraversal(Optic, optic_is=OpticIs.IX_AFFINE_TRAVERSAL):
 def itraversal(f: Callable) -> IxTraversal:
     """Builds an IxTraversal from an indexed van Laarhoven traversal function.
 
-    f :: (i -> a -> g b) -> s -> g t   for any Applicative g
+    f : Applicative g => (i -> a -> g b) -> s -> g t
 
-    itraversal :: (forall g. Applicative g => (i -> a -> g b) -> s -> g t)
+    itraversal : (forall g. Applicative g => (i -> a -> g b) -> s -> g t)
                -> IxTraversal i s t a b
 
+    Each profunctor p receives the VL function via p.iwander(f), which
+    constructs the concrete indexed function from p's own inner function
+    and tags it with the appropriate Applicative via EffectfulFunction.
+
     """
-    def the_traversal(p):
-        if isinstance(p, IndexedStar):
-            # Effectful traversal: run f with index-accumulating effectful function.
-            g = IndexedStar.run(p)    # i_acc -> a -> f b
-            eff = p._effect
-            def go(i_acc, s):
-                return f(lambda ix, a: g(_pack_index(i_acc, ix), a))(s)
-            return IndexedStar(go, eff)
-
-        if isinstance(p, Indexed):
-            # Pure modification: wrap in Identity, unwrap after.
-            g = Indexed.run(p)        # i_acc -> a -> b
-            def modify(i_acc, s):
-                return Identity.run(
-                    f(lambda ix, a: Identity(g(_pack_index(i_acc, ix), a)))(s)
-                )
-            return Indexed(modify)
-
-        if isinstance(p, IndexedForget):
-            # Indexed fold: use f with a Const applicative to extract values.
-            h = IndexedForget.run(p)  # i_acc -> a -> r
-            m = p._monoid             # pylint: disable=protected-access
-            cls_c = type_const(m)
-            def fold_s(i_acc, s):
-                g_c = lambda ix, a: Const(h(_pack_index(i_acc, ix), a), m)
-                return run_const(f(g_c)(s))
-            return IndexedForget(fold_s, m)
-
-        if isinstance(p, Star):
-            # Plain effectful traversal (cast_as(TRAVERSAL) path): ignore indices.
-            g = Star.run(p)
-            eff = p._functor
-            def star_run(s):
-                return f(lambda _ix, a: g(a))(s)
-            return Star(star_run, eff)
-
-        if isinstance(p, Forget):
-            # Plain fold (cast_as(FOLD) path): run f forgetting indices.
-            h = Forget.run(p)
-            m = p._monoid             # pylint: disable=protected-access
-            cls_c = type_const(m)
-            def plain_fold(s):
-                g_c = lambda _ix, a: Const(h(a), m)
-                return run_const(f(g_c)(s))
-            return Forget(plain_fold, m)
-
-        raise TypeError(f'itraversal: unsupported profunctor {type(p).__name__!r}')
-
-    return IxTraversal(the_traversal)
+    return IxTraversal(iwander_(f))
 
 
-#
-# ieach : IndexedTraversable f => IxTraversal i (f a) (f b) a b
 #
 # Indexed traversal over all elements of an IndexedTraversable container.
 # Uses the container's itraverse method, which provides intrinsic indices.
 #
+# ieach : IndexedTraversable f => IxTraversal i (f a) (f b) a b
+#
+# Implementation note: itraverse_ is already curried:
+#
+#     itraverse_(g) : IndexedTraversable -> g t
+#
+# The EffectfulFunction tag on g lets itraverse_ pick the right Applicative.
+#
 
-def _ieach_fn(p):
-    """Core dispatch for ieach."""
-    if isinstance(p, IndexedStar):
-        g = IndexedStar.run(p)    # i_acc -> a -> f b
-        eff = p._effect
-        def modify(i_acc, s):
-            return _itraverse(lambda ix, a: g(_pack_index(i_acc, ix), a), s, eff)
-        return IndexedStar(modify, eff)
-
-    if isinstance(p, Star):
-        # Plain effectful traversal (cast_as(TRAVERSAL) path): ignore indices.
-        g = Star.run(p)           # a -> f b
-        eff = p._functor
-        def star_modify(s):
-            return _itraverse(lambda _ix, a: g(a), s, eff)
-        return Star(star_modify, eff)
-
-    if isinstance(p, Indexed):
-        g = Indexed.run(p)        # i_acc -> a -> b (pure)
-        def pure_modify(i_acc, s):
-            return Identity.run(
-                _itraverse(lambda ix, a: Identity(g(_pack_index(i_acc, ix), a)), s)
-            )
-        return Indexed(pure_modify)
-
-    if isinstance(p, IndexedForget):
-        h = IndexedForget.run(p)
-        m = p._monoid             # pylint: disable=protected-access
-        cls_c = type_const(m)
-        def fold_s(i_acc, s):
-            g_c = lambda ix, a: Const(h(_pack_index(i_acc, ix), a), m)
-            return run_const(_itraverse(g_c, s, cls_c))
-        return IndexedForget(fold_s, m)
-
-    if isinstance(p, Forget):
-        h = Forget.run(p)
-        m = p._monoid             # pylint: disable=protected-access
-        cls_c = type_const(m)
-        def plain_fold(s):
-            g_c = lambda _ix, a: Const(h(a), m)
-            return run_const(_itraverse(g_c, s, cls_c))
-        return Forget(plain_fold, m)
-
-    raise TypeError(f'ieach: unsupported profunctor {type(p).__name__!r}')
-
-
-ieach = IxTraversal(_ieach_fn)
-"""Indexed traversal over all elements of any IndexedTraversable container."""
+ieach = itraversal(itraverse_)
+ieach.__doc__ = """Indexed traversal over all elements of any IndexedTraversable container."""
 
 
 #
 # Indexed traversal action
 #
 
-def itraverse_of(optic, effect: type, g: Callable) -> Function:
-    """Runs an indexed effectful function over all foci; returns s -> f t.
+def itraverse_of(optic, g: Callable, effect: type[Applicative] | None = None) -> Function:
+    """Applies an indexed effectful function to each element of a structure
+    targeted by an Indexed Traversal, evaluates these actions from left to
+    right, and collects the results.
 
-    itraverse_of :: Applicative f
-                 => IxTraversal i s t a b -> type[f] -> (i -> a -> f b) -> s -> f t
+    If g is an EffectfulFunction, the corresponding effect type f
+    is used, otherwise an Applicative type f should be provided in
+    the effect argument. Raises an exception if the effect type
+    cannot be determined.
 
-    The effect class is passed explicitly because Python cannot infer it.
+    Returns a function s -> f t to be applied to traversable structure s.
+
+    itraverse_of : Applicative f
+                 => IxTraversal i s t a b
+                 -> EffectfulFunction (i, a) (f b)
+                 -> (s -> f t)
+
+                   Applicative f
+                 => IxTraversal i s t a b
+                 -> (i -> a -> f b)
+                 -> Type f
+                 -> (s -> f t)
 
     """
+    if isinstance(g, EffectfulFunction):
+        effect = g.effect
+    elif effect is None:
+        raise ValueError('Cannot determine effect type in itraverse_of, '
+                         'supply effect argument or EffectfulFunction.')
+
     p = IndexedStar(g, effect)
-    result = IndexedStar.run(optic(p))    # i_acc -> s -> f t
-    return Function(lambda s: result(_MISSING, s))
+    result: Callable = IndexedStar.run(optic(p))    # i_acc -> s -> f t
+    return Function(lambda s: result(_MISSING, s))  # strip index accumulator sentinel

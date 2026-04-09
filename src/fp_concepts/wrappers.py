@@ -17,7 +17,12 @@ __all__ = [
 ]
 
 class EffectfulFunction(Function):
-    "Class representing a function that produces an Applicative Functor."
+    """Class representing a function that produces an Applicative Functor.
+
+    This represents a function a -> f b for an Applicative f, allowing
+    the Applicative type f to be accessed with its .effecct property.
+
+    """
 
     def __init__(self, f, ap: type[Applicative]):
         self._applicative = ap
