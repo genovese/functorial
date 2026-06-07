@@ -3,8 +3,8 @@
 """Implements simple Huffman encoding/decoding of tokens from a known distribution.
 
 Example:
-  >>> import fp_concepts.examples.huffman
-  >>> from fp_concepts.examples.huffman import huffman, encode, decode, make_code
+  >>> import functorial.examples.huffman
+  >>> from functorial.examples.huffman import huffman, encode, decode, make_code
   >>> h0 = huffman(['a', 'b', 'c','d','e','f'], [0.45, 0.13, 0.12, 0.16, 0.09, 0.05])
   >>> print(h0.code_tree)
   •
@@ -55,11 +55,11 @@ from collections.abc import Collection, Iterable
 from io              import TextIOBase, StringIO   # Move first to Reader in 3.14+
 from typing          import Literal, NamedTuple
 
-from fp_concepts.Either    import Left, Right
-from fp_concepts.List      import NonEmptyList
-from fp_concepts.Trees     import LeafyBinaryTree
-from fp_concepts.functions import identity
-from fp_concepts.ops       import fold_map_default, Collect
+from functorial.Either    import Left, Right
+from functorial.List      import NonEmptyList
+from functorial.Trees     import LeafyBinaryTree
+from functorial.functions import identity
+from functorial.ops       import fold_map_default, Collect
 
 class PriorityQueue:
     def __init__(self):

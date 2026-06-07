@@ -21,7 +21,7 @@ wheels = [
 ]
 
 [[package]]
-name = "fp-concepts"
+name = "functorial"
 source = { editable = "." }
 
 [package.dev-dependencies]

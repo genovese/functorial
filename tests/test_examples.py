@@ -24,9 +24,9 @@ from enum      import Enum
 from functools import partial
 from operator  import add, mul
 
-import fp_concepts
+import functorial
 
-from fp_concepts.all import *
+from functorial.all import *
 
 
 #

@@ -18,27 +18,27 @@ Covers five themes:
 
 import pytest
 
-from fp_concepts.dict        import Dict
-from fp_concepts.list        import List
-from fp_concepts.maybe       import Some, Nothing
-from fp_concepts.monoids     import Sum
-from fp_concepts.trees       import RoseTree
-from fp_concepts.wrappers    import EffectfulFunction
+from functorial.dict        import Dict
+from functorial.list        import List
+from functorial.maybe       import Some, Nothing
+from functorial.monoids     import Sum
+from functorial.trees       import RoseTree
+from functorial.wrappers    import EffectfulFunction
 
-from fp_concepts.optics.optic     import OpticIs
-from fp_concepts.optics.fold      import collect, fold_map_of
-from fp_concepts.optics.getter    import view
-from fp_concepts.optics.setter    import over
-from fp_concepts.optics.traversal import traverse_of
+from functorial.optics.optic     import OpticIs
+from functorial.optics.fold      import collect, fold_map_of
+from functorial.optics.getter    import view
+from functorial.optics.setter    import over
+from functorial.optics.traversal import traverse_of
 
-from fp_concepts.optics.ix_lens import (
+from functorial.optics.ix_lens import (
     ilens, igetter, iview, iover, iput, selfIndex,
 )
-from fp_concepts.optics.ix_fold import (
+from functorial.optics.ix_fold import (
     ifolded, ifolding,
     ifold_map_of, icollect, iright_fold_of, ileft_fold_of,
 )
-from fp_concepts.optics.ix_traversal import (
+from functorial.optics.ix_traversal import (
     itraversal, ieach, itraverse_of,
 )
 

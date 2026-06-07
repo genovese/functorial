@@ -5,38 +5,38 @@ AffineFold, AffineTraversal, Prism, Iso, and composition.
 
 import pytest
 
-from fp_concepts.either  import Left, Right
-from fp_concepts.list    import List
-from fp_concepts.maybe   import Nothing, Some
-from fp_concepts.monoids import Sum, Count, Product
-from fp_concepts.wrappers import EffectfulFunction
+from functorial.either  import Left, Right
+from functorial.list    import List
+from functorial.maybe   import Nothing, Some
+from functorial.monoids import Sum, Count, Product
+from functorial.wrappers import EffectfulFunction
 
-from fp_concepts.optics.lens import (
+from functorial.optics.lens import (
     Lens, lens, at, alongside, t_0, t_1, t_2,
 )
-from fp_concepts.optics.getter import getter, view, view_with
-from fp_concepts.optics.setter import over, put, puts
-from fp_concepts.optics.fold import (
+from functorial.optics.getter import getter, view, view_with
+from functorial.optics.setter import over, put, puts
+from functorial.optics.fold import (
     folded, folding,
     fold_map_of, fold_of, collect,
     sum_of, count_of, product_of, mean_of,
     left_fold_of, right_fold_of,
 )
-from fp_concepts.optics.traversal import (
+from functorial.optics.traversal import (
     traversal, both, each, traverse_of,
 )
-from fp_concepts.optics.affine_fold import (
+from functorial.optics.affine_fold import (
     afold, afolding, filtered, a_or, has, preview_of,
 )
-from fp_concepts.optics.affine_traversal import (
+from functorial.optics.affine_traversal import (
     affine_traversal_vl, ix, matching,
     preview, over, put,
 )
-from fp_concepts.optics.prism import (
+from functorial.optics.prism import (
     prism, left, right, some, nothing, only,
 )
-from fp_concepts.optics.review import review
-from fp_concepts.optics.iso import (
+from functorial.optics.review import review
+from functorial.optics.iso import (
     iso, from_, involuted, non,
     negated, swapped, flipped,
     to_list, to_dict, to_pair
