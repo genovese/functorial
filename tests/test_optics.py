@@ -39,6 +39,7 @@ from fp_concepts.optics.review import review
 from fp_concepts.optics.iso import (
     iso, from_, involuted, non,
     negated, swapped, flipped,
+    to_list, to_dict, to_pair
 )
 
 #
@@ -448,6 +449,21 @@ class TestComposition:
         # swapped @ fst: view first of swapped pair = second of original
         assert view(swapped @ fst)((1, 2)) == 2
 
+    def test_nested(self):
+        assert (List.of(1, 2, 3, 4, 5) >> over(each, lambda x: x + 1)) == [2, 3, 4, 5, 6]
+
+        _x = List.of((1, 2), (2, 3), (4, 5), (6, 7))
+        assert (_x >> over(each @ t_0, lambda x: x + 1)) == [(2, 2), (3, 3), (5, 5), (7, 7)]
+
+        _y = List.of((1, 2, 3), (2, 3, 5), (4, 5, 6), (6, 7, 8))
+        assert (_y >> over(each @ t_0, lambda x: x + 1)) == [(2, 2, 3), (3, 3, 5), (5, 5, 6), (7, 7, 8)]
+
+        _z = List.of((List.of(1, 10, 100), 2, 3), (List.of(2, 20, 200), 3, 5),
+                     (List.of(4, 40, 400), 5, 6), (List.of(6, 9, 11), 7, 8))
+        assert (_z >> over(each @ t_0 @ each, lambda x: x + 1)) == [([2, 11, 101], 2, 3), ([3, 21, 201], 3, 5), ([5, 41, 401], 5, 6), ([7, 10, 12], 7, 8)]
+
+        _w = List.of(([1, 10, 100], 2, 3), ([2, 20, 200], 3, 5), ([4, 40, 400], 5, 6), ([6, 9, 11], 7, 8))
+        assert (_w >> over(each @ t_0 @ to_list @ each, lambda x: x + 1)) == [([2, 11, 101], 2, 3), ([3, 21, 201], 3, 5), ([5, 41, 401], 5, 6), ([7, 10, 12], 7, 8)]
 
 #
 # Downgrades (i.e., optics used as weaker types)

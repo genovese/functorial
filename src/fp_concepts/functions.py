@@ -366,6 +366,26 @@ class Function:
         return self.__class__(compose(other, self._fn))
 
     #
+    # To avoid circular dependencies, we provide instances of
+    # basic typeclasses (e.g., Functor, Profunctor) via protocols
+    # rather than inheritance. So this does not provide default
+    # implementations of various derived methods that are defined
+    # for inheritance in the XXX_ classes (e.g., Applicative_).
+    #
+
+    # Functor instance via Protocol ((->) a)
+
+    ## ATTN
+
+    # Applicative instance via Protocol for ((->) a)
+
+    ## ATTN
+
+    # Monad instance via Protocol for ((->) a)
+
+    ## ATTN
+
+    #
     # Profunctor Methods. See optics/* for formal instances.
     #
     # These are treated as protocol methods here without formally

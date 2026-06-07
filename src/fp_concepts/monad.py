@@ -70,6 +70,11 @@ def do(fn, *cls_eval_args, **eval_kwds):
     **Monadic value** (not the function, see @effect) when the
     do-block passed the given arguments. It is *not* a function.
 
+    Within the decorated function, `yield` keywords correspond
+    to left arrows (<-) in classical do notation. They take
+    a monadic value on the right and yield the "unwrapped" value
+    within the monadic context.
+
     ATTN
 
     """
@@ -98,6 +103,10 @@ def do(fn, *cls_eval_args, **eval_kwds):
 # Change name to effect
 def effect(fn, cls=None):
     """Returns a function that executes a do-block.
+
+    This is like `do`, but the decorated symbol defines a function
+    for computing a monadic value rather than (as in `do`) being
+    overridden *by* the computed monadic value.
 
     ATTN
 

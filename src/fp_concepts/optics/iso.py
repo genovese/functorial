@@ -22,10 +22,13 @@ from __future__    import annotations
 
 from typing        import Callable
 
+from ..dict        import Dict
 from ..either      import Left, Right
 from ..profunctor  import dilift
 from ..functions   import Function, identity
 from ..maybe       import maybe, Nothing, Some
+from ..list        import List
+from ..pair        import Pair
 
 from .optic        import Optic, OpticIs
 from .re_          import re
@@ -40,6 +43,9 @@ __all__ = [
     'negated',
     'swapped',
     'flipped',
+    'to_list',
+    'to_dict',
+    'to_pair',
 ]
 
 
@@ -125,3 +131,29 @@ def _flip_either(e):
 
 flipped: Iso = involuted(_flip_either)
 flipped.__doc__ = """Iso swapping Left and Right in an Either; self-inverse."""
+
+
+#
+# Conversion of builtin to enhanced types (list to List, dict to Dict, etc.)
+#
+# These can be included in an optic path when a component has a builtin
+# rather than an enhanced type.
+#
+# We use identity for the forward direction as a List is a list etc. by inheritance.
+#
+# Example:
+#
+#   ell = List.of((List.of(1, 10, 100), 2, 3), (List.of(2, 20, 200), 3, 5),
+#                 (List.of(4, 40, 400), 5, 6), (List.of(6, 9, 11), 7, 8))
+#   ell >> over(each @ t_0 @ to_list @ each, lambda x: x + 1)
+#   ==> [([2, 11, 101], 2, 3), ([3, 21, 201], 3, 5), ([5, 41, 401], 5, 6), ([7, 10, 12], 7, 8)]
+#
+
+to_list: Iso = iso(List, identity)
+to_list.__doc__ = """Iso that converts a list into a List, with enhanced capabilities."""
+
+to_dict: Iso = iso(Dict, identity)
+to_dict.__doc__ = """Iso that converts a dict into a Dict, with enhanced capabilities."""
+
+to_pair: Iso = iso(Pair, identity)
+to_pair.__doc__ = """Iso that converts a pair (x, y) into a Pair, with enhanced capabilities."""
