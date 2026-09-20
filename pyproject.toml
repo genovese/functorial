@@ -4,6 +4,7 @@ dynamic = ["version"]
 description = "Functional Programming concepts playground"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
 authors = [
     { name = "Christopher R. Genovese", email = "genovese@cmu.edu" }
 ]
@@ -12,6 +13,7 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -32,7 +34,7 @@ build-backend = "hatchling.build"
 path = "src/functorial/__about__.py"
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.12", "3.13"]
+python = ["3.12", "3.13", "3.14"]
 
 [tool.black]
 target-version = ["py312"]
