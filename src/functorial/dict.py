@@ -14,10 +14,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .applicative    import Applicative
-from .functor        import Functor, map    # pylint: disable=redefined-builtin
+from .foldable       import IndexedFoldable_
+from .functor        import map                # pylint: disable=redefined-builtin
 from .list           import List
 from .monoids        import Monoid
-from .traversable    import sequence
+from .traversable    import IndexedTraversable_, sequence
 from .functions      import with_fst
 
 __all__ = ['Dict']
@@ -27,7 +28,7 @@ __all__ = ['Dict']
 # Dictionary k v as a Functor
 #
 
-class Dict[K, V](dict, Functor):
+class Dict[K, V](dict, IndexedTraversable_, IndexedFoldable_):
     def __new__(cls, *args, **kwds):
         return super().__new__(cls, *args, **kwds)
 

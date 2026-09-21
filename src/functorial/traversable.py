@@ -6,14 +6,15 @@ from __future__   import annotations
 
 from abc             import abstractmethod
 from collections.abc import Callable
-from typing          import Protocol
+from typing          import Protocol, cast
 
 from .applicative import Applicative, IdentityA
 from .functor     import Functor
 from .functions   import identity
 from .wrappers    import get_effect
 
-__all__ = ['Traversable', 'traverse', 'sequence', 'IndexedTraversable', 'itraverse',]
+__all__ = ['Traversable', 'Traversable_', 'traverse', 'sequence',
+           'IndexedTraversable', 'IndexedTraversable_', 'itraverse',]
 
 
 class Traversable(Functor, Protocol):
@@ -21,10 +22,51 @@ class Traversable(Functor, Protocol):
     def traverse(self, f: type[Applicative], g: Callable) -> Applicative:   # Hard to type properly in Python
         ...
 
-class IndexedTraversable[I, A](Protocol):
+class Traversable_(Traversable):
+    """Traversable base class for inheritance that provides default implementations of extra methods.
+
+    The Traversable protocol defines the primitive `traverse`; this gives
+    access to `sequence` as well with a default implementation that
+    should work without extra effort. So for concrete Traversable classes,
+    we generally prefer inheriting from this rather than just relying
+    on the protocol (i.e., implementing traverse as a method).
+
+    """
     @abstractmethod
-    def itraverse(self, f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:   # Hard to type properly in Python
+    def traverse(self, f: type[Applicative], g: Callable) -> Applicative:
         ...
+
+    def sequence(self, effect: type[Applicative] = IdentityA) -> Applicative:
+        """Evaluates effects on each element, collecting the results in the same shape."""
+        return self.traverse(effect, identity)
+
+class IndexedTraversable[I, A](Traversable, Protocol):
+    @abstractmethod                                                           # vv Hard to type properly in Python
+    def itraverse(self, f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:
+        ...
+
+class IndexedTraversable_[I, A](IndexedTraversable[I, A], Traversable_):
+    """IndexedTraversable base class for inheritance that provides default implementations of extra methods.
+
+    The IndexedTraversable Traversable protocol defines the
+    primitive `itraverse`; this gives access to `isequence` as well
+    with a default implementation that should work without extra
+    effort. So for concrete IndexedTraversable classes, we generally
+    prefer inheriting from this rather than just relying on the
+    protocol (i.e., implementing traverse as a method).
+
+    """
+    @abstractmethod
+    def itraverse(self, f: type[Applicative], g: Callable[[I, A], Applicative]) -> Applicative:
+        ...
+
+    def traverse(self, f: type[Applicative], g: Callable) -> Applicative:
+        """A traversal that ignores the index, using itraverse."""
+        return self.itraverse(f, lambda _i, a: g(a))
+
+    def isequence(self, effect: type[Applicative] = IdentityA) -> Applicative:
+        """Evaluates effects on each (index, element) pair, collecting results in the same shape."""
+        return self.itraverse(effect, lambda _i, a: cast(Applicative, a))
 
 
 #
