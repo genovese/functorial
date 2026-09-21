@@ -4,20 +4,14 @@
 #
 # To run examples, enter
 #
-#   python fpc_examps.py
+#   python test_examples.py
 #
 # To run the tests, enter
 #
-#   python -m pytest -v fpc_examps.py
+#   python -m pytest -v test_examples.py
 #
 # python 3.12+ is expected here because
 # of the typing syntax.
-#
-# You should put all the files
-#
-# Applicative.py, Bifunctor.py, Functor.py, Monad.py, fpc.py, fpc_examps.py
-#
-# in your working directory for this.
 #
 
 from enum      import Enum

@@ -22,8 +22,15 @@ dependencies = []
 [dependency-groups]
 dev = [
     "hypothesis>=6.118.0",
+    "mypy>=1.13",
     "pytest>=8.3.3",
     "ruff>=0.7.2",
+]
+elpy = [
+    "autopep8",
+    "black",
+    "jedi",
+    "yapf",
 ]
 
 [build-system]
