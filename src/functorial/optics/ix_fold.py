@@ -28,7 +28,8 @@ from typing       import Callable
 
 from ..functions  import Function, fn_eval, identity
 from ..list       import List
-from ..monoids    import Endo, Monoid
+from ..maybe      import Maybe, Nothing, Some
+from ..monoids    import Endo, First, Monoid
 from ..utils      import Collect
 
 from .optic       import Optic, OpticIs, _MISSING
@@ -44,6 +45,7 @@ __all__ = [
     'iright_fold_of',
     'ileft_fold_of',
     'icollect',
+    'ipreview',
 ]
 
 
@@ -106,6 +108,25 @@ def icollect(optic) -> Function:
 
     """
     return ifold_map_of(optic, lambda i, a: List.of((i, a)), Collect)
+
+def ipreview(optic) -> Function:
+    """Optionally extracts the leftmost (index, focus) pair of an optic.
+
+    Works with any IxFold-like optic (IxLens, IxFold, IxTraversal, ...).
+    Returns a function s -> Maybe (i, a): Some((i, a)) for the first match,
+    Nothing() if there is none.
+
+    ipreview : IxFold i s a -> s -> Maybe (i, a)
+
+    """
+    def previewed(s):
+        result = ifold_map_of(optic, lambda i, a: Some((i, a)), First)(s)
+        # An empty structure yields First's raw munit (None) rather than
+        # Nothing(), since fold_map never calls mcombine with no elements
+        # to combine; normalize that here.
+        return result if isinstance(result, Maybe) else Nothing()
+
+    return Function(previewed)
 
 def iright_fold_of(optic, f: Callable, init) -> Function:
     """Right fold over indexed foci using an accumulating function.

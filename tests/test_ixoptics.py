@@ -6,7 +6,7 @@ Covers five themes:
   1. IxLens basics: ilens, iview, iover, iput, selfIndex, index pairing
 
   2. IxFold on List and Dict: ifolded, ifolding, ifold_map_of, icollect,
-     iright_fold_of, ileft_fold_of
+     iright_fold_of, ileft_fold_of, ipreview
 
   3. IxTraversal: ieach on List, Dict, RoseTree; itraverse_of with effects
 
@@ -36,7 +36,7 @@ from functorial.optics.ix_lens import (
 )
 from functorial.optics.ix_fold import (
     ifolded, ifolding,
-    ifold_map_of, icollect, iright_fold_of, ileft_fold_of,
+    ifold_map_of, icollect, iright_fold_of, ileft_fold_of, ipreview,
 )
 from functorial.optics.ix_traversal import (
     itraversal, ieach, itraverse_of,
@@ -130,6 +130,24 @@ class TestIxFold:
 
     def test_icollect_empty(self):
         assert list(icollect(ifolded)(List())) == []
+
+    def test_ipreview_list(self):
+        xs = List([10, 20, 30])
+        assert ipreview(ifolded)(xs) == Some((0, 10))
+
+    def test_ipreview_empty(self):
+        # An empty structure normalizes to Nothing(), not bare None
+        # (First's raw munit), since fold_map never calls mcombine.
+        assert ipreview(ifolded)(List()) == Nothing()
+
+    def test_ipreview_dict_is_one_of_the_pairs(self):
+        d = Dict({'a': 1, 'b': 2, 'c': 3})
+        result = ipreview(ifolded)(d)
+        assert result in (Some(('a', 1)), Some(('b', 2)), Some(('c', 3)))
+
+    def test_ipreview_composed_with_selfindex(self):
+        xs = List([10, 20, 30])
+        assert ipreview(selfIndex @ ifolded)(xs) == Some(((xs, 0), 10))
 
     def test_ifold_map_of_weighted_sum(self):
         # sum of i * a: 0*10 + 1*20 + 2*30 = 80
