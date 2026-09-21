@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from .alternative import Alternative
 from .applicative import Applicative, map2
 from .foldable    import IndexedFoldable_
 from .functor     import pymap
@@ -39,7 +40,7 @@ __all__ = ['List', 'NonEmptyList', 'ZipList',
 # Foldable, and Traversable.
 #
 
-class List[A](list, Monad, IndexedTraversable_, IndexedFoldable_):
+class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
     def __new__(cls, *args, **kwds):
         return super().__new__(cls, *args, **kwds)
 

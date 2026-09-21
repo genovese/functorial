@@ -14,15 +14,14 @@ from typing          import TypeGuard, cast
 
 from .functor        import map                 # pylint: disable=redefined-builtin
 from .applicative    import Applicative
-from .bifunctor      import Bifunctor
+from .bitraversable  import Bitraversable_
 from .monad          import Monad
-from .traversable    import Traversable
 
 
 __all__ = ['Either', 'Left', 'Right', 'is_left', 'is_right', 'either', 'either_', ]
 
 
-class Either[A, B](Monad, Bifunctor, Traversable):
+class Either[A, B](Monad, Bitraversable_):
     @abstractmethod
     def from_left(self, default: A) -> A:
         ...
@@ -94,6 +93,9 @@ class Left[A, B](Either[A, B]):
     def traverse(self, f: type[Applicative], _g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         return f.pure(self)
 
+    def bitraverse(self, _f: type[Applicative], g1: Callable[[A], Applicative], _g2: Callable[[B], Applicative]) -> Applicative:
+        return map(Left, g1(self._value))
+
 class Right[A, B](Either[A, B]):
     __match_args__ = ('_value',)
 
@@ -133,6 +135,9 @@ class Right[A, B](Either[A, B]):
 
     def traverse(self, _f: type[Applicative], g: Callable[[B], Applicative]) -> Applicative:  # g : a -> f b
         return map(Right, g(self._value))
+
+    def bitraverse(self, _f: type[Applicative], _g1: Callable[[A], Applicative], g2: Callable[[B], Applicative]) -> Applicative:
+        return map(Right, g2(self._value))
 
 def is_left[A, B](x: Either[A, B]) -> TypeGuard[Left[A, B]]:
     return isinstance(x, Left)

@@ -9,16 +9,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .applicative import Applicative
-from .bifunctor   import Bifunctor
-from .functor     import map                  # pylint: disable=redefined-builtin
-from .traversable import Traversable
-from .functions   import is_iterable, is_sequence
+from .applicative    import Applicative, map2
+from .bitraversable  import Bitraversable_
+from .functor        import map                  # pylint: disable=redefined-builtin
+from .functions      import is_iterable, is_sequence
 
 __all__ = ['Pair', 'pair', 'fork', 'duplex']
 
 
-class Pair[A, B](tuple, Bifunctor, Traversable):
+class Pair[A, B](tuple, Bitraversable_):
     """A 2-tuple with benefits.
 
     This is an instance of tuple that is an instance of Bifunctor,
@@ -72,6 +71,10 @@ class Pair[A, B](tuple, Bifunctor, Traversable):
     def traverse(self, _f: type[Applicative], g: Callable[[A], Applicative]) -> Applicative:  # g : a -> f b
         a, b = self
         return map(self.with_first, g(b))
+
+    def bitraverse(self, _f: type[Applicative], g1: Callable[[A], Applicative], g2: Callable[[B], Applicative]) -> Applicative:
+        a, b = self
+        return map2(Pair, g1(a), g2(b))
 
 
 #
