@@ -1,5 +1,11 @@
 # functorial
 
+[![PyPI - Version](https://img.shields.io/pypi/v/functorial.svg?cacheSeconds=300)](https://pypi.org/project/functorial)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/functorial.svg?cacheSeconds=300)](https://pypi.org/project/functorial)
+
+-----
+
+
 Functional-programming concepts for Python: typeclasses (Functor, Applicative,
 Monad, Foldable, Traversable, Alternative, ...), standard FP data types
 (`Maybe`, `Either`, `List`, `Dict`, `NTuple`, trees, `IO`, `Reader`, `Writer`,
