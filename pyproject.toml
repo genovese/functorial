@@ -26,11 +26,14 @@ dev = [
     "pytest>=8.3.3",
     "ruff>=0.7.2",
 ]
+# These will disappear when the venv is rebuilt
+# Use `uv sync --group elpy` to restore.
 elpy = [
     "autopep8",
     "black",
     "jedi",
     "yapf",
+    "flake8",
 ]
 
 [build-system]
