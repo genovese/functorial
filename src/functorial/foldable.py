@@ -8,7 +8,8 @@
 #     ifold  : (i -> a -> b -> a) -> a -> f b -> a
 #
 # ruff: noqa: N802
-#
+# pylint: disable=invalid-name
+
 
 from __future__      import annotations
 
@@ -18,7 +19,7 @@ from typing          import Protocol
 
 from .applicative    import Applicative, IdentityA, ap_second
 from .functions      import identity
-from .maybe          import Maybe, Some, Nothing
+from .maybe          import Maybe, Some, Nothing, maybe
 from .monoids        import Conjunction, Disjunction, Endo, First, Monoid
 
 
@@ -26,6 +27,7 @@ __all__ = ['Foldable', 'Foldable_', 'IndexedFoldable', 'IndexedFoldable_', 'fold
 
 
 class Foldable[A](Protocol):
+    """A structure that can be folded over, i.e., converted to a list."""
     @abstractmethod
     def fold_map[M](self, f: Callable[[A], M], monoid: Monoid) -> M:
         "fold_map : Monoid m => Self -> (a -> m) -> m"
@@ -68,7 +70,13 @@ class Foldable_[A](Foldable[A]):
         return self.fold_right(lambda a, k: lambda acc: k(f(acc, a)), identity)(initial)  # type: ignore[return-value, arg-type]
 
     def to_list(self) -> list[A]:
-        """Collects all elements into a list in left-to-right order."""
+        """Collects all elements into a list in left-to-right order.
+
+        NOTE: Returns a plain list not a List to avoid circular imports!!
+        This is the same issue in to_list and map_maybe.  So these
+        should be used sparingly or wrapped in List.
+
+        """
         return self.fold_right(lambda a, acc: [a] + acc, [])
 
     # traverse_ : (a -> f b) -> t a -> f ()
@@ -90,10 +98,27 @@ class Foldable_[A](Foldable[A]):
         return self.fold_map(pred, Conjunction)
 
     def concat_map[B](self, f: Callable[[A], list[B]]) -> list[B]:
+        """Maps a list producing function over the structure concatenating into one list.
+
+        NOTE: Returns a plain list not a List to avoid circular imports!!
+        This is the same issue in to_list and map_maybe.  So these
+        should be used sparingly or wrapped in List.
+
+        """
         def _extend(acc: list[B], a: A) -> list[B]:
             acc.extend(f(a))
             return acc
         return self.fold(_extend, [])
+
+    def map_maybe[B](self, f: Callable[[A], Maybe[B]]) -> list[B]:
+        """Maps a function over the structure, keeping only the present results.
+
+        NOTE: Returns a plain list not a List to avoid circular imports!!
+        This is the same issue in to_list and concat_map.  So these
+        should be used sparingly or wrapped in List.
+
+        """
+        return self.concat_map(lambda a: maybe([], lambda b: [b], f(a)))
 
 
 class IndexedFoldable[I, A](Foldable[A], Protocol):
