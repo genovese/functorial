@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from .alternative import Alternative
 from .applicative import Applicative, map2
@@ -79,6 +79,21 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
 
         """
         return cls(xs)
+
+    @classmethod
+    def sorted(cls, xs: Iterable, key=None, reverse=False) -> List:
+        """Return a new List containing all items from the iterable in ascending order.
+
+        A custom key function can be supplied to customize the sort
+        order, and the reverse flag can be set to request the result
+        in descending order.
+
+        Note that we do not enforce the constraint on the type of
+        the iterable elements, but in principle, the expectation is
+        that they will have a common type.
+
+        """
+        return cls(sorted(xs, key=key, reverse=reverse))
 
     # Functor and IndexedFunctor Instances
 
@@ -257,6 +272,29 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
             traversed = map2(List._unsafe_set(index), traversed, g(index, item))
         return traversed
 
+    # Utility Methods
+
+    def schwarzian[B](self, annotate: Callable[[A], Maybe[tuple[A, B]]], reverse=False) -> List[B]:
+        """Computes a Schwarzian transform sort of the list, optionally removing some elements.
+
+        The function annotate tags each element with a key in the
+        second component of a tuple (wrapped in Some), or can drop
+        an element by returning Nothing. The list is then sorted in
+        ascending order of the tags, and then the tag are dropped.
+
+        If `reverse` is True, the list is sorted in descending order
+        of the tags.
+
+        This is similar to using the key argument to List.sorted
+        except that some elements can be excluded from the result in
+        one operation, without recomputing the keys.
+
+        """
+        fst = lambda x: x[0]
+        snd = lambda x: x[1]
+        wrapped = List.sorted(map_maybe(annotate, self), key=snd, reverse=reverse)
+        return wrapped.map(fst)
+
 
 #
 # List Utilities
@@ -321,8 +359,8 @@ def map_maybe[A, B](f: Callable[[A], Maybe[B]], xs: List[A]) -> List[B]:
 
     """
     result: List[B] = List()
-    for x in xs:
-        match f(x):
+    for a in xs:
+        match f(a):
             case Some(b):
                 result.append(b)
             case Nothing():
