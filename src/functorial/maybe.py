@@ -57,8 +57,8 @@ class Maybe[A](Monad, Traversable, Alternative, ABC):
     def map2[B, C](self, g: Callable[[A, B], C], fb: Maybe[B]) -> Maybe[C]:
         ...
 
-    @property
-    def empty(self):
+    @classmethod
+    def empty(cls) -> Maybe[A]:
         return Nothing()
 
     def alt(self, fb: Maybe[A]) -> Maybe[A]:   # type: ignore
