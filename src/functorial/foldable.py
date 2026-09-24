@@ -151,8 +151,8 @@ class IndexedFoldable_[I, A](IndexedFoldable[I, A], Foldable_[A]):
 
         This is correct but has O(n) stack depth. Override for efficiency.
         """
-        return self.ifold_right(  # type: ignore[return-value]
-            lambda i, a, k: lambda acc: k(f(i, acc, a)), identity
+        return self.ifold_right(
+            lambda i, a, k: lambda acc: k(f(i, acc, a)), identity  # type: ignore[return-value, arg-type]
         )(initial)
 
     def to_indexed_list(self) -> list[tuple[I, A]]:
