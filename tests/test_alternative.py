@@ -12,9 +12,9 @@ list of Some(x) choices.
 
 """
 
-from functorial.alternative import Alternative, optional
+from functorial.alternative import Alternative, guard, optional
 from functorial.list        import List
-from functorial.maybe       import Nothing, Some
+from functorial.maybe       import Maybe, Nothing, Some
 
 
 class TestListIsAlternative:
@@ -56,3 +56,27 @@ class TestOptionalAlwaysSucceeds:
         # optional itself never fails, regardless of the input's own success/failure
         assert optional(Some(1)) != Nothing()
         assert optional(Nothing()) != Nothing()
+
+
+class TestEmptyIsAClassmethod:
+    """Regression test: Maybe.empty as a class method not a property.
+
+    Maybe.empty used to be a @property, which was convenient but
+    broke guard(Maybe, ...) at least, which uses the class method
+    f.empty() on the bare class. This need for an empty when there
+    is no instance suggests a clasmethod is better than a property
+    in practice. This matches pure for instance.
+
+    """
+
+    def test_guard_true_on_maybe(self):
+        assert guard(Maybe, True) == Some(())
+
+    def test_guard_false_on_maybe(self):
+        assert guard(Maybe, False) == Nothing()
+
+    def test_guard_true_on_list(self):
+        assert guard(List, True) == List.of(())
+
+    def test_guard_false_on_list(self):
+        assert guard(List, False) == List()

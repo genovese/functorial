@@ -12,19 +12,23 @@ Checks three basic issues:
 
   2. Foldable_/IndexedFoldable_ defaults now available on List and Dict.
 
-     Specifically: to_list, to_indexed_list, find, any, all, concat_map, fold_right.
+     Specifically: to_list, to_indexed_list, find, any, all, concat_map,
+     fold_right, map_maybe.
 
   3. Traversable_/IndexedTraversable_ defaults now available on List and Dict
 
      Specifically: sequence, isequence.
+
+Some utility tests have also leaked in here because they exercise
+List, Dict, and Foldable. These will eventually be moved.
 
 """
 
 from functorial.applicative import IdentityA
 from functorial.dict        import Dict
 from functorial.foldable    import Foldable_, IndexedFoldable_
-from functorial.list        import List
-from functorial.maybe       import Some
+from functorial.list        import List, cat_maybes, map_maybe
+from functorial.maybe       import Nothing, Some
 from functorial.traversable import IndexedTraversable_
 
 
@@ -77,6 +81,11 @@ class TestListFoldableDefaults:
     def test_concat_map(self):
         assert List.of(1, 2, 3).concat_map(lambda x: [x, x]) == [1, 1, 2, 2, 3, 3]
 
+    def test_map_maybe(self):
+        evens = List.of(1, 2, 3, 4, 5).map_maybe(lambda x: Some(x * 10) if x % 2 == 0 else Nothing())
+        assert evens == [20, 40]
+        assert type(evens) is list  # generic default, not List-typed
+
 
 class TestDictFoldableDefaults:
     def test_to_list(self):
@@ -95,6 +104,39 @@ class TestDictFoldableDefaults:
 
     def test_fold_right_default(self):
         assert Dict.of(('a', 1), ('b', 2)).fold_right(lambda v, acc: acc + v, 0) == 3
+
+    def test_map_maybe(self):
+        d = Dict.of(('a', 1), ('b', 2), ('c', 3))
+        result = d.map_maybe(lambda v: Some(v * 10) if v % 2 == 0 else Nothing())
+        assert sorted(result) == [20]
+        assert type(result) is list  # generic default, not Dict-typed
+
+
+class TestListMapMaybeUtilities:
+    """Tests for list.py's own map_maybe/cat_maybes, which are List-typed."""
+
+    def test_map_maybe_keeps_only_present(self):
+        result = map_maybe(lambda x: Some(x * 10) if x % 2 == 0 else Nothing(), List.of(1, 2, 3, 4, 5))
+        assert result == List.of(20, 40)
+        assert type(result) is List
+
+    def test_map_maybe_all_nothing(self):
+        result = map_maybe(lambda _x: Nothing(), List.of(1, 2, 3))
+        assert result == List()
+
+    def test_map_maybe_empty_input(self):
+        assert map_maybe(Some, List()) == List()
+
+    def test_cat_maybes(self):
+        result = cat_maybes(List.of(Some(1), Nothing(), Some(3), Nothing()))
+        assert result == List.of(1, 3)
+        assert type(result) is List
+
+    def test_cat_maybes_all_present(self):
+        assert cat_maybes(List.of(Some(1), Some(2))) == List.of(1, 2)
+
+    def test_cat_maybes_all_absent(self):
+        assert cat_maybes(List.of(Nothing(), Nothing())) == List()
 
 
 class TestTraversableDefaults:
