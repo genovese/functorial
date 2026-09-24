@@ -14,14 +14,17 @@ from collections.abc import Callable
 from .alternative import Alternative
 from .applicative import Applicative, map2
 from .foldable    import IndexedFoldable_
+from .functions   import identity
 from .functor     import pymap
+from .maybe       import Maybe, Some, Nothing
 from .monad       import Monad
 from .monoids     import Monoid
 from .traversable import IndexedTraversable_
 
 __all__ = ['List', 'NonEmptyList', 'ZipList',
            'zip_with', 'zip_longest',
-           'cons', 'snoc', 'snoc_', 'append_']
+           'cons', 'snoc', 'snoc_', 'append_',
+           'map_maybe', 'cat_maybes']
 
 
 #
@@ -101,9 +104,9 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
 
     # Alternative Instance
 
-    @classmethod         # ATTN: 30 Sep 2025 from @property
-    def empty(self):
-        return self.__class__([])
+    @classmethod
+    def empty(cls):
+        return cls([])
 
     def alt(self, fb):
         return self.__class__([*self, *fb])
@@ -307,6 +310,32 @@ def safe_append_[A](ls: List[A], x: A) -> List[A]:
     ls2: List[A] = List(ls)
     ls2.append(x)
     return ls2
+
+def map_maybe[A, B](f: Callable[[A], Maybe[B]], xs: List[A]) -> List[B]:
+    """Maps a function over a list, keeping only the present results.
+
+    map_maybe : (a -> Maybe b) -> List a -> List b
+
+    Note: the method inherited from Foldable_ returns a list not a List,
+    for import reasons, so this function is preferred.
+
+    """
+    result: List[B] = List()
+    for x in xs:
+        match f(x):
+            case Some(b):
+                result.append(b)
+            case Nothing():
+                pass
+    return result
+
+def cat_maybes[A](xs: List[Maybe[A]]) -> List[A]:
+    """Collects the present values from a list of Maybes, discarding Nothings.
+
+    cat_maybes : List (Maybe a) -> List a
+
+    """
+    return map_maybe(identity, xs)
 
 
 #
