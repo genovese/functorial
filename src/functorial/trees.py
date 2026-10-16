@@ -48,12 +48,13 @@ from __future__ import annotations
 from abc             import ABC, abstractmethod
 from collections.abc import Callable
 from functools       import partial
+from operator        import eq
 from typing          import TYPE_CHECKING, TypeGuard, cast
 
 from .applicative import Applicative, map2, ap
 from .either      import Either, Left, Right
 from .functor     import map, imap  # pylint: disable=redefined-builtin
-from .list        import List
+from .list        import List, ZipList
 from .monoids     import Monoid
 from .traversable import traverse, itraverse
 from .singleton   import ContingentSingletonFromABC, FinalAttribute
@@ -165,6 +166,8 @@ class RoseTree[A](Applicative):
         data RoseTree a = Node a (List (RoseTree a))
 
     """
+    __match_args__ = ('_value', '_subtrees')
+
     def __init__(self, sexp: list):
         "Creates a Rose Tree from s-expression input. See `to_sexp`."
         if len(sexp) == 0:
@@ -173,6 +176,10 @@ class RoseTree[A](Applicative):
         val, *children = sexp
         self._value = val
         self._subtrees: List = List(RoseTree(child) for child in children)  # Note: mypy forces hint
+
+    def untree(self) -> tuple[A, ZipList[RoseTree[A]]]:
+        """Partitions a RoseTree into a node and a zip list of subtrees."""
+        return (self._value, ZipList(self._subtrees))
 
     def to_sexp(self):
         """Converts a rose tree to s-expression format.
@@ -208,6 +215,18 @@ class RoseTree[A](Applicative):
 
     def __str__(self):
         return self.as_str().strip()
+
+    def __eq__(self, other):
+        if not isinstance(other, RoseTree):
+            return NotImplemented
+
+        node1, subtrees1 = self.untree()
+        node2, subtrees2 = other.untree()
+
+        if node1 != node2 or len(subtrees1) != len(subtrees2):
+            return False
+
+        return all(ap(eq, subtrees1, subtrees2))
 
     @classmethod
     def make(cls, data: A, subtrees: list) -> RoseTree[A]:

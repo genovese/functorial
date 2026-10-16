@@ -95,6 +95,14 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
         """
         return cls(sorted(xs, key=key, reverse=reverse))
 
+    # Utility Methods
+
+    def uncons(self) -> Maybe[tuple[A, List[A]]]:
+        """Destructures list as a head and a tail, accounting for empty lists."""
+        if not self:
+            return Nothing()
+        return Some((self[0], self[1:]))
+
     # Functor and IndexedFunctor Instances
 
     def map[B](self, g: Callable[[A], B]):
