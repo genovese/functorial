@@ -9,7 +9,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
+from itertools       import islice
+from typing          import Self, SupportsIndex
+
+import operator
 
 from .alternative import Alternative
 from .applicative import Applicative, map2
@@ -21,10 +25,20 @@ from .monad       import Monad
 from .monoids     import Monoid
 from .traversable import IndexedTraversable_
 
-__all__ = ['List', 'NonEmptyList', 'ZipList',
-           'zip_with', 'zip_longest',
-           'cons', 'snoc', 'snoc_', 'append_',
-           'map_maybe', 'cat_maybes']
+__all__ = [
+    'List',
+    'NonEmptyList',
+    'SequenceView',
+    'ZipList',
+    'append_',
+    'cat_maybes',
+    'cons',
+    'map_maybe',
+    'snoc_',
+    'snoc',
+    'zip_longest',
+    'zip_with',
+]
 
 
 #
@@ -56,12 +70,23 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
         return items
 
     def __add__(self, other):
-        concat = super().__add__(other)
-        return List(concat)
+        if not isinstance(other, list):
+            return NotImplemented
+        return List(list.__add__(self, other))
 
     def __radd__(self, other):
-        concat = super().__radd__(other)
-        return List(concat)
+        if not isinstance(other, list):
+            return NotImplemented
+        return List(list.__add__(other, self))
+
+    def __mul__(self, other: SupportsIndex, /) -> List[A]:
+        try:
+            n = operator.index(other)
+        except TypeError:
+            return NotImplemented
+        return List(list.__mul__(self, n))
+
+    __rmul__ = __mul__
 
     def copy(self):
         return self.__class__(super().copy())
@@ -97,11 +122,16 @@ class List[A](list, Monad, Alternative, IndexedTraversable_, IndexedFoldable_):
 
     # Utility Methods
 
-    def uncons(self) -> Maybe[tuple[A, List[A]]]:
-        """Destructures list as a head and a tail, accounting for empty lists."""
+    def uncons(self) -> Maybe[tuple[A, SequenceView[A]]]:
+        """Destructures list as a head and a tail, accounting for empty lists.
+
+        The tail is a SequenceView, a read-only live view of the mutable
+        list's tail. Use tail.thaw() to materialize it into a List.
+
+        """
         if not self:
             return Nothing()
-        return Some((self[0], self[1:]))
+        return Some((self[0], SequenceView(self, offset=1)))
 
     # Functor and IndexedFunctor Instances
 
@@ -387,26 +417,25 @@ def cat_maybes[A](xs: List[Maybe[A]]) -> List[A]:
 #
 # NonEmptyList
 #
-# type NonEmptyList a = Cons a (List a)
-#
 
 class NonEmptyList[A](List[A]):
+    """A List that is guaranteed/required to be non-empty.
+
+    type NonEmptyList a = Cons a (List a)
+
+    """
     def __init__(self, xs):
         if len(xs) == 0:
             raise ValueError('NonEmptyList cannot be empty')
         super().__init__(xs)
 
-    # Maintain non-empty invariant on removal operations
+    # Maintain the non-empty invariant on explicit removal operations
 
     def __delitem__(self, key):
-        # pylint: disable=too-many-boolean-expressions
         if isinstance(key, slice):
-            start, stop, step = key.indices(len(self))
-            # ATTN: Check this test when step > 1, just a quick stab here
-            if ((step == 1  and stop - start >= len(self)) or
-                (step == -1 and start - stop >= len(self)) or
-                (abs(step) > 1 and abs(stop - start) > 0 and len(self) == 1)):
-                raise ValueError(f'del[{key}] would delete all elements of a NonEmptyList')
+            if len(range(*key.indices(len(self)))) >= len(self):
+                emesg = f'del[{key}] would delete all elements of a NonEmptyList'
+                raise ValueError(emesg)
         elif len(self) == 1:
             raise ValueError(f'del[{key}] would remove the only element of a NonEmptyList')
 
@@ -424,6 +453,38 @@ class NonEmptyList[A](List[A]):
         if len(self) == 1:
             raise ValueError(f'pop({index}) would delete the only element of a NonEmptyList')
         return super().pop(index)
+
+    # Maintain the invariant on slice assignment that would empty the list
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            start, stop, step = key.indices(len(self))
+            if step == 1:   # only contiguous slices can change the length
+                value = list(value)   # materialize in case value is a one-shot iterator
+                if len(self) - max(0, stop - start) + len(value) == 0:
+                    emesg = f'[{key}] = ... would delete all elements of a NonEmptyList'
+                    raise ValueError(emesg)
+        super().__setitem__(key, value)
+
+    # Maintain the invariant on the *= 0 operation
+
+    def __imul__(self, n: SupportsIndex, /) -> Self:
+        if operator.index(n) < 1:
+            raise ValueError(f'*= {n} would delete all elements of a NonEmptyList')
+        return super().__imul__(n)
+
+    # Mul returns a NonEmptyList for positive multiple, else List
+
+    def __mul__(self, other: SupportsIndex, /) -> List[A]:
+        try:
+            n = operator.index(other)
+        except TypeError:
+            return NotImplemented
+        if n <= 0:
+            return List()
+        return NonEmptyList(list.__mul__(self, n))
+
+    __rmul__ = __mul__
 
 
 #
@@ -457,3 +518,91 @@ class ZipList[A](List):
     @classmethod
     def __do__(cls, make_generator, is_generator):
         raise TypeError('ZipList does not have a Monad instance')
+
+
+#
+# Read-only views of sequences
+#
+
+class SequenceView[A](Sequence[A]):
+    """A live, read-only view of a sequence or a part of it."""
+    __slots__ = ('_data', '_indices')
+    _data: Sequence[A]
+    _indices: range
+
+    def __init__(self, data: Sequence[A], offset: int = 0, length: int | None = None):
+        if offset < 0 or (length is not None and length < 0):
+            raise ValueError('SequenceView offset and length must be non-negative')
+        if isinstance(data, SequenceView):  # flatten to view the underlying data directly
+            base = data._indices
+            data = data._data
+        else:
+            base = range(len(data))
+        self._data = data
+        self._indices = base[offset:(None if length is None else offset + length)]
+
+    @classmethod
+    def _from_range(cls, data: Sequence[A], indices: range) -> SequenceView[A]:
+        view = cls.__new__(cls)
+        view._data, view._indices = data, indices
+        return view
+
+    def __len__(self):
+        return len(self._indices)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._from_range(self._data, self._indices[key])
+        return self._data[self._indices[key]]
+
+    def __iter__(self):
+        r = self._indices
+        # How we make the iterator has different performance characteristics
+        # based on the offset and length of the view.
+        #   + islice skips the first r.start items one at a time, which scales
+        #     badly for large offsets.
+        #   + Indexing jumps straight there but has a worse fixed cost  small offsets.
+        # Based on rough empirical measurement, islice wins while the
+        # offset is up to about 4x the view's length.
+        if r.step == 1 and r.start <= 4 * len(r):
+            return islice(self._data, r.start, r.stop)
+        return pymap(self._data.__getitem__, r)
+
+    def __eq__(self, other):
+        if isinstance(other, Sequence) and not isinstance(other, (str, bytes)):
+            return len(self) == len(other) and all(a == b for a, b in zip(self, other, strict=True))
+        return NotImplemented
+
+    __hash__ = None   # type: ignore[assignment]  # this is a live view, contents can change
+
+    def __repr__(self):
+        return f'SequenceView({list(self)!r})'
+
+    def thaw(self) -> List[A]:
+        return List(iter(self))
+
+
+#
+# Lazy Slices of list-like containers that auto-materialize to a List
+#
+# ATTN: This is provisional
+
+class LazySlice:
+    """Like islice but materializes to a pre-specified list subclass when called.
+
+    """
+    def __init__(self, iterable, start, stop=None, step=1, container_type=List):
+        self._container = container_type
+        self._iterator = islice(iterable, start, stop, step)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._iterator)
+
+    def __call__(self):
+        return self._container(self._iterator)
+
+    def thaw(self):
+        return self._container(self._iterator)
