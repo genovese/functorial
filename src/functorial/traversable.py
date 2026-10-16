@@ -118,7 +118,7 @@ def traverse_( g: Callable, effect: type[Applicative] = IdentityA) -> Callable[[
 def sequence(t: Traversable, effect: type[Applicative] = IdentityA) -> Applicative:
     """Evaluate effects on each element of a structure, collecting the results in the effectful context.
 
-    Type: (Traversable t, Applicative f) =>  t a -> f (t a)
+    Type: (Traversable t, Applicative f) =>  t (f a) -> f (t a)
 
     """
     return traverse(identity, t, effect)

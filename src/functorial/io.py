@@ -85,7 +85,7 @@ class IO[A](Monad):
 
     @classmethod
     def unsafe_ensure_run_io(cls, io: IO[A] | A) -> A:
-        "Like unsafe_run but also accepts and returns an A values as is."
+        """Like unsafe_run but also accepts and returns an A values as is."""
         if isinstance(io, cls):
             return cls.unsafe_run(io)
         return cast(A, io)
@@ -104,18 +104,18 @@ class IO[A](Monad):
     # Implements the Functor Trait
 
     def map[B](self, f: Callable[[A], B]) -> IO[B]:
-        "Maps a function over an IO computation."
+        """Maps a function over an IO computation."""
         return IO(compose_nullary(f, self.code))
 
     # Implements the Applicative trait
 
     @classmethod
     def pure(cls, a: A) -> IO[A]:
-        "Wraps a pure value in an IO object."
+        """Wraps a pure value in an IO object."""
         return IO(lambda: a)
 
     def map2[B, C](self, g: Callable[[A, B], C], fb: IO[B]) -> IO[C]:
-        "Maps a binary function over two IO objects to create a new IO object."
+        """Maps a binary function over two IO objects to create a new IO object."""
         def _mapped() -> C:
             a = IO.unsafe_run(self)
             b = IO.unsafe_run(fb)
@@ -126,21 +126,21 @@ class IO[A](Monad):
     # Implements the Monad trait
 
     def bind[B](self, a_to_io_b: Callable[[A], IO[B]]) -> IO[B]:
-        "Implements the Monad trait."
+        """Implements the Monad trait."""
         def _bound():
             return a_to_io_b(IO.unsafe_run(self))
 
         return IO(_bound)
 
     def join(self):
-        "Unwraps IO (IO a) to IO a."
+        """Unwraps IO (IO a) to IO a."""
         # We can do this more efficiently than does the default function.
         # Just call the outer function to get the inner IO object.
         return IO.unsafe_run(self)
 
     @classmethod
     def __do__(cls, make_generator, is_generator) -> IO[A]:
-        "Implements do-notation for IO"
+        """Implements do-notation for IO"""
 
         if not is_generator:
             def _get_value():
