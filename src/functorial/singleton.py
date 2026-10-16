@@ -5,6 +5,7 @@
 from __future__ import annotations
 from abc        import ABCMeta
 from threading  import Lock
+from typing     import ClassVar
 
 __all__ = [
     'FinalAttribute',
@@ -51,8 +52,10 @@ class FinalAttribute:
 
     def __set__(self, obj, value):
         if hasattr(obj, self.private_name):
-            raise AttributeError(f'The {self.private_name} attribute cannot be modified once set.')
+            error_mesg = f'The {self.private_name} attribute cannot be modified once set.'
+            raise AttributeError(error_mesg)
         setattr(obj, self.private_name, value)
+
 
 class Singleton(type):
     """Metaclass for classes that are used as singletons.
@@ -66,7 +69,7 @@ class Singleton(type):
             ...
 
     """
-    _instances: dict = {}
+    _instances: ClassVar[dict] = {}
     _lock: Lock = Lock()
 
     def __call__(cls, *args, **kwargs):
@@ -90,7 +93,7 @@ class SingletonFromABC(ABCMeta):
     when Baseclass or its ancestor inherits from ABC.
 
     """
-    _instances: dict = {}
+    _instances: ClassVar[dict] = {}
     _lock: Lock = Lock()
 
     def __call__(cls, *args, **kwargs):
@@ -142,7 +145,7 @@ class ContingentSingleton(type):
             ...
 
     """
-    _instances: dict = {}
+    _instances: ClassVar[dict] = {}
     _lock: Lock = Lock()
 
     def __call__(cls, *args, **kwargs):
@@ -201,7 +204,7 @@ class ContingentSingletonFromABC(ABCMeta):
     Here, Baseclass or an ancestor should inherit from ABC.
 
     """
-    _instances: dict = {}
+    _instances: ClassVar[dict] = {}
     _lock: Lock = Lock()
 
     def __call__(cls, *args, **kwargs):
