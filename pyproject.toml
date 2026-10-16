@@ -26,15 +26,21 @@ dev = [
     "pytest>=8.3.3",
     "ruff>=0.7.2",
 ]
-# These will disappear when the venv is rebuilt
-# Use `uv sync --group elpy` to restore.
+# Editor tooling; installed by default via [tool.uv] default-groups below.
+# If you remove the tool.uv, say to eliminate extra installs in CI or for
+# contributors, then these will disappear when the venv is rebuilt.
+# Use `uv sync --group elpy` to restore them in that case.
 elpy = [
     "autopep8",
     "black",
     "jedi",
     "yapf",
     "flake8",
+    "pip>=26.2.1",
 ]
+
+[tool.uv]
+default-groups = ["dev", "elpy"]
 
 [build-system]
 requires = ["hatchling"]
@@ -82,7 +88,7 @@ lint.select = [
 
 lint.ignore = [
   # My ignores
-  "I001", "EM101", "Q000", "E501", "N999", # Ruff doesn't support "E241", "E272", "E302", "E305", "W504",
+  "I001", "EM101", "Q000", "E501", "N999", "EM102", # Ruff doesn't support "E241", "E272", "E302", "E305", "W504",
   # Allow non-abstract empty methods in abstract base classes
   "B027",
   # Allow boolean positional values in function calls, like `dict.get(... True)`
