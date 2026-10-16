@@ -122,10 +122,10 @@ Note on Type Checking
 """
 
 from __future__  import annotations
-from abc         import ABCMeta, abstractmethod
+from abc         import abstractmethod
 from dataclasses import make_dataclass, field
 from threading   import Lock
-from typing      import Any
+from typing      import Any, Protocol
 
 import sys
 
@@ -171,7 +171,19 @@ def _is_stale_variant(obj, root_type) -> bool:
             and old_root.__qualname__ == root_type.__qualname__)
 
 
-class SumTypeMeta(ABCMeta):
+# The standard (and original) approach here is to have SumTypeMeta inherit
+# from ABCMeta. But this causes a metaclass conflict for sum types that
+# inherit from Protocol-based classes like Monad, Traversable, ....
+# Since this is a primary use case, we change the metaclass to the
+# same metaclass used for Protocol. Unfortunately, this is typing's
+# *private*  metaclass _ProtocolMeta, which is also a subclass
+# of ABCMeta. Deriving from it instead of ABCMeta directly solves
+# our problem with no significant downside, *except* that the private
+# metaclass is subject to change with Python versions. So, we have
+# to detect that and use a computed base class for SumTypeMeta,
+# which upsets mypy, which is why the type: ignore is used below.
+
+class SumTypeMeta(type(Protocol)):  # type: ignore[misc]
     """ATTN
     """
     def __new__(mcls, name, bases, class_dict, *, data=None, singleton=False, **kwargs):
@@ -214,8 +226,18 @@ class SumTypeMeta(ABCMeta):
         elif singleton:
             class_dict['_is_singleton'] = FinalAttribute(True)
             class_dict.setdefault('__reduce__', lambda self: (type(self), ()))
+            # Calling a subscripted generic, e.g. Nothing[int](), tries to set
+            # __orig_class__ on the result. This unreadable, unsettable property
+            # makes that a no-op, so the shared instance is never mutated.
+            class_dict.setdefault('__orig_class__', property())
 
-        cls = super().__new__(mcls, name, bases, class_dict, **kwargs)
+        # Ordinary variants get a metaclass with C-level construction.
+        # Combined user metaclasses keep the general (slower) path.
+        target = mcls
+        if sum_type_base is not None and not singleton and mcls is SumTypeMeta:
+            target = _VariantMeta
+
+        cls = super().__new__(target, name, bases, class_dict, **kwargs)
 
         cls._is_root_type = is_root_type
         if is_root_type:
@@ -235,16 +257,20 @@ class SumTypeMeta(ABCMeta):
         if cls is SumType:
             raise TypeError('SumType cannot be instantiated')
 
-        if getattr(cls, '_is_root_type', False):
+        if cls._is_root_type:
             emesg = f'SumType base class {cls.__name__} cannot be instantiated'
             raise TypeError(emesg)
 
         if getattr(cls, '_is_singleton', False):
-            with cls._lock:
-                if cls not in cls._instances:
-                    instance = super().__call__(*args, **kwargs)
-                    cls._instances[cls] = instance
-            return cls._instances[cls]
+            # Check before locking; lock only to create the instance
+            instance = cls._instances.get(cls)
+            if instance is None:
+                with cls._lock:
+                    instance = cls._instances.get(cls)
+                    if instance is None:
+                        instance = super().__call__(*args, **kwargs)
+                        cls._instances[cls] = instance
+            return instance
         return super().__call__(*args, **kwargs)
 
     def register(cls, _subclass):
@@ -281,6 +307,18 @@ class SumTypeMeta(ABCMeta):
                     emesg = f'Generating {subclass} would redefine {module.__name__}.{subclass}'
                     raise TypeError(emesg)
                 setattr(module, subclass, generated)          # ok to bind in module
+
+class _VariantMeta(SumTypeMeta):
+    """Metaclass for ordinary (non-singleton) sum type variants.
+
+    Using this for ordinary variants restores type's C-level
+    __call__, bypassing the checks in SumTypeMeta.__call__, which
+    never apply to these classes. This makes constructing variants
+    about as fast as for plain classes, which can be non-trivial
+    with oft-used Sum types like Maybe and Either.
+
+    """
+    __call__ = type.__call__
 
 class SumType(metaclass=SumTypeMeta):
     __slots__ = ()

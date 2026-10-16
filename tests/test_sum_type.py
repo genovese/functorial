@@ -76,7 +76,7 @@ def test_normalize_rejects_other_types():
 def test_generated_variants_are_subclasses():
     for variant in (Dot, Circle, Rect):
         assert issubclass(variant, Shape)
-        assert type(variant) is SumTypeMeta
+        assert isinstance(variant, SumTypeMeta)
 
 def test_generated_variants_have_correct_module():
     for variant in (Dot, Circle, Rect):
