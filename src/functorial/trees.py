@@ -644,10 +644,15 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
     """Binary trees with values only in the leaves.
 
     These have type
+
         data LeafyBinaryTree a = Leaf a | Branch (LeafyBinaryTree a) (LeafyBinaryTree a)
 
+    but we represent this internally with a single class.
+
     """
-    def __init__(self, sexp: SExp | A):
+    __match_args__ = ('_node',)
+
+    def __init__(self, sexp: A | NoSExp | list):
         """Creates a Leafy Binary Tree from s-expression input. See `to_sexp`.
 
         Currently requires all lists to be wrapped in SExp to distinguish
@@ -656,16 +661,23 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
         """
         # Store node as Either[A, (LeafyBinaryTree[A], LeafyBinaryTree[A])]
         # with Left for Leaf and Right for Branch
-        if isinstance(sexp, SExp):
+        self._node: Either[A, tuple[LeafyBinaryTree[A], LeafyBinaryTree[A]]]
+
+        if isinstance(sexp, NoSExp):  # aggregate leaf node protected
+            self._node = Left(sexp.unwrapped)
+        elif not isinstance(sexp, list):  # Leaf node, raw value
+            self._node = Left(sexp)  # type: ignore[arg-type]
+        else:
+            if not isinstance(sexp, SExp):
+                sexp = SExp.recurse(sexp)
+
             if len(sexp) == 0:       # type: ignore
                 raise ValueError('Leafy Binary tree cannot be empty.')
-            if len(sexp) != 2:       # type: ignore
+            if len(sexp) != 2:       # type: ignore[arg-type]
                 raise ValueError('Leafy Binary tree should have two children per branch node.')
+
             left, right = sexp       # type: ignore
-            self._node: Either[A, tuple[LeafyBinaryTree[A], LeafyBinaryTree[A]]] = \
-                Right((LeafyBinaryTree(left), LeafyBinaryTree(right)))
-        else:  # Leaf node
-            self._node = Left(sexp)  # type: ignore
+            self._node = Right((LeafyBinaryTree(left), LeafyBinaryTree(right)))
 
         super().__init__()
 
