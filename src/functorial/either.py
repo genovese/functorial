@@ -8,7 +8,6 @@
 
 from __future__      import annotations
 
-from abc             import abstractmethod
 from collections.abc import Callable
 from typing          import TypeGuard, cast
 
@@ -16,12 +15,13 @@ from .functor        import map                 # pylint: disable=redefined-buil
 from .applicative    import Applicative
 from .bitraversable  import Bitraversable_
 from .monad          import Monad
+from .sum_type       import SumType, abstractmethod
 
 
 __all__ = ['Either', 'Left', 'Right', 'is_left', 'is_right', 'either', 'either_', ]
 
 
-class Either[A, B](Monad, Bitraversable_):
+class Either[A, B](Monad, Bitraversable_, SumType, data=['Left', 'Right']):
     @abstractmethod
     def from_left(self, default: A) -> A:
         ...

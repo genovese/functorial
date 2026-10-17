@@ -26,6 +26,7 @@ from .alternative import Alternative
 from .applicative import Applicative
 from .functor     import map               # pylint: disable=redefined-builtin
 from .monad       import Monad
+from .sum_type    import SumType
 from .traversable import Traversable
 from .unit        import Unit
 
@@ -40,7 +41,7 @@ __all__ = ['Maybe', 'Nothing', 'Some', 'maybe', 'maybe_', 'is_nothing', 'is_some
 #
 # We'll need to rely only on the protocols here and not inheritance except for ABC
 #               vvv      vvv         vvv
-class Maybe[A](Monad, Traversable, Alternative, ABC):
+class Maybe[A](Monad, Traversable, Alternative, SumType, data=['Nothing', 'Some']):
     @abstractmethod
     def get(self, default: A) -> A:
         ...
@@ -137,7 +138,7 @@ class Some[A](Maybe[A]):
         # g : () -> a -> f b
         return map(Some, g((), self._value))
 
-class Nothing[A](Maybe[A]):
+class Nothing[A](Maybe[A], singleton=True):
     def __str__(self):
         return 'None'
 
