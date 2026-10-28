@@ -37,3 +37,29 @@ def test_io():
     z_prime = IO.unsafe_run(sequence(ell, effect=IO))
     assert z_prime == [10, 20, 30, 40]
     assert out2.getvalue() == "foo\nbar\nzap\nok\nwow\n***\n"
+
+
+def test_bind_runs_both_actions_only_when_run():
+    log: list[str] = []
+    a = IO(lambda: as_io(log.append("a"), 1))
+    b = a.bind(lambda x: IO(lambda: as_io(log.append("b"), x + 1)))
+
+    assert log == []
+    assert IO.unsafe_run(b) == 2
+    assert log == ["a", "b"]
+
+    # Running again re-executes the effects
+    assert IO.unsafe_run(b) == 2
+    assert log == ["a", "b", "a", "b"]
+
+
+def test_join_defers_outer_effects():
+    log: list[str] = []
+    nested = IO(lambda: as_io(log.append("outer"),
+                              IO(lambda: as_io(log.append("inner"), 5))))
+    flat = nested.join()
+
+    assert isinstance(flat, IO)
+    assert log == []
+    assert IO.unsafe_run(flat) == 5
+    assert log == ["outer", "inner"]

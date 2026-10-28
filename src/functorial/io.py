@@ -127,16 +127,17 @@ class IO[A](Monad):
 
     def bind[B](self, a_to_io_b: Callable[[A], IO[B]]) -> IO[B]:
         """Implements the Monad trait."""
-        def _bound():
-            return a_to_io_b(IO.unsafe_run(self))
+        def _bound() -> B:
+            return IO.unsafe_run(a_to_io_b(IO.unsafe_run(self)))
 
         return IO(_bound)
 
     def join(self):
         """Unwraps IO (IO a) to IO a."""
         # We can do this more efficiently than does the default function.
-        # Just call the outer function to get the inner IO object.
-        return IO.unsafe_run(self)
+        # Running is deferred: the outer action produces the inner IO,
+        # which is then run, but only when the result is itself run.
+        return IO(lambda: IO.unsafe_run(IO.unsafe_run(self)))
 
     @classmethod
     def __do__(cls, make_generator, is_generator) -> IO[A]:
