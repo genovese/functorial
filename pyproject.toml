@@ -99,6 +99,8 @@ lint.ignore = [
   "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
   # Deprecated
   "UP038",
+  # Annoying
+  "T201",
 ]
 
 lint.unfixable = [
