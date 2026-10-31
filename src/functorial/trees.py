@@ -49,9 +49,9 @@ from abc             import ABC, abstractmethod
 from collections.abc import Callable
 from functools       import partial
 from operator        import eq
-from typing          import TYPE_CHECKING, TypeGuard, cast
+from typing          import TYPE_CHECKING, Protocol, TypeGuard, cast
 
-from .applicative import Applicative, map2, ap
+from .applicative import Applicative, IdentityA, map2, ap
 from .either      import Either, Left, Right
 from .functor     import map, imap  # pylint: disable=redefined-builtin
 from .list        import List, ZipList
@@ -128,7 +128,7 @@ class SExp(list):
 # Common Structure
 #
 
-class TreeLike(ABC):
+class TreeLike(Protocol):
     """Common structure for all tree classes.
 
     This allows identifying node values and subtrees
@@ -136,20 +136,24 @@ class TreeLike(ABC):
 
     """
 
-    @abstractmethod
     def node_value(self):  # -> Maybe[A]
-        "Returns Some(val) if val is the data in the root node of a subtree, else Nothing()."
+        """If there is data val in the root node of a subtree, returns Some(val), else Nothing()."""
         ...
 
-    @abstractmethod
-    def subtrees(self):
-        "Returns a List of subtrees for the root node of this tree."
+    def subtrees(self):  # -> List[TreeLike]
+        """Returns a List of subtrees from the root node of this tree."""
         ...
 
     @staticmethod
-    @abstractmethod
-    def tree_traverse(effect: type[Applicative], node_fn: Callable, subtree_fn: Callable, tree):
-        "Generic tree traversal, applying node_fn at nodes and subtree_fn at subtree branches."
+    def tree_traverse(tree, node_fn: Callable, subtree_fn: Callable, effect: type[Applicative] = IdentityA):
+        """Generic tree traversal, applying node_fn at nodes and subtree_fn at subtree branches.
+
+        For an Applicative F, specified by `effect`:
+
+          node_fn : A -> F B
+          subtree_fn : List[TreeLike] -> F B
+
+        """
         ...
 
 
@@ -826,7 +830,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 #
 # Tries (aka Prefix Trees)
 #
-#  data Trie = record Trie whee
+#  data Trie = record Trie where
 #      key        : Maybe a
 #      children   : Map k (Trie k m a)
 #      annotation : m   -- an associated value or monoidal annotation
@@ -837,7 +841,7 @@ class LeafyBinaryTree[A](AbstractBinaryTree):
 #
 # Tulip Trees - like a Rose tree but with different types on leaf and branches
 #
-#   data TulipTree b l = Leaf l | Branch b (NonEmptyList HTree b l)
+#   data TulipTree b l = Leaf l | Branch b (NonEmptyList (TulipTree b l))
 
 # ATTN
 
