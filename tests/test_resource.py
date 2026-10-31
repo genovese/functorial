@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io as pio
+import os
+import tempfile
 import threading
 import time
 
@@ -13,13 +15,13 @@ import pytest
 
 from functorial.io          import IO, as_io
 from functorial.monad       import do
-from functorial.resource    import (Resource, ResourceRegistry, acquire, acquire_cm, acquire_with, release,
-                                    lift_io, AfterError, AtCleanup, EarlyRelease)
+from functorial.resource    import (Resource, ResourceRegistry, acquire, acquire_cm, acquire_with, open_file,
+                                    release, lift_io, temp_file, attach, detach, AfterError, AtCleanup, EarlyRelease)
 
-def close_file(fp) -> IO:
+def close_file_in_io(fp) -> IO:
     return IO(lambda: fp.close())
 
-def open_file(name, mode) -> IO:
+def open_file_in_io(name, mode) -> IO:
     return IO(lambda: open(name, mode))
 
 fst = itemgetter(0)
@@ -33,7 +35,7 @@ def test_resource(tmp_path):
 
     @do(Resource)
     def make_test_file():
-        token, f = yield acquire(open_file(rtext, "w"), close_file)
+        token, f = yield acquire(open_file_in_io(rtext, "w"), close_file_in_io)
         for i in range(16):
             print(f'Line {i + 1}', file=f)
         print("Done", file=f)
@@ -41,7 +43,7 @@ def test_resource(tmp_path):
     IO.unsafe_run(make_test_file.run())
 
     out1 = pio.StringIO()
-    x1 = acquire(open_file(rtext, "r"), close_file)
+    x1 = acquire(open_file_in_io(rtext, "r"), close_file_in_io)
     x2 = x1.bind(lambda t_fp: lift_io(IO(lambda: as_io(print(snd(t_fp).read(), end='', file=out1), 32))))
     out1ret = IO.unsafe_run(x2.run())
     assert out1ret == 32
@@ -52,7 +54,7 @@ def test_resource(tmp_path):
 
     @do(Resource)
     def example2():
-        token, f = yield acquire(open_file(rnuml, "w"), close_file)
+        token, f = yield acquire(open_file_in_io(rnuml, "w"), close_file_in_io)
         print('4', file=f)
         yield release(token)
 
@@ -98,7 +100,7 @@ close secnd
     out2.close()
 
     out3 = pio.StringIO()
-    x3 = acquire_cm(open_file(rtext, "r"))  # No close needed
+    x3 = acquire_cm(open_file_in_io(rtext, "r"))  # No close needed
     x4 = x3.bind(lambda t_fp: lift_io(IO(lambda: as_io(print(snd(t_fp).read(), end='', file=out3), 32))))
     out3ret = IO.unsafe_run(x4.run())
     assert out3ret == 32
@@ -705,3 +707,304 @@ def test_acquire_cm_looks_up_methods_on_the_type():
         return value
 
     assert run(program) == 'A'
+
+
+#
+# File convenience functions
+#
+
+def test_open_file_text_round_trip(tmp_path):
+    path = tmp_path / 'text.txt'
+
+    @do(Resource)
+    def write():
+        _, f = yield open_file(path, 'w', -1, 'utf-16', newline='\r\n')
+        f.write('héllo\nworld\n')
+        return f
+
+    @do(Resource)
+    def read():
+        _, f = yield open_file(path, 'r', -1, 'utf-16')
+        return f.read(), f
+
+    written = run(write)
+    text, read_from = run(read)
+    assert text == 'héllo\nworld\n'
+    assert path.read_bytes() == 'héllo\r\nworld\r\n'.encode('utf-16')
+    assert written.closed and read_from.closed
+
+@pytest.mark.parametrize('mode, buffering, expected_type', [
+    ('rb',  -1, pio.BufferedReader),
+    ('rb',  0,  pio.FileIO),
+    ('r+b', -1, pio.BufferedRandom),
+    ('ab',  -1, pio.BufferedWriter),
+    ('r',   -1, pio.TextIOWrapper),
+])
+def test_open_file_forwards_mode_and_buffering(tmp_path, mode, buffering, expected_type):
+    path = tmp_path / 'data.bin'
+    path.write_bytes(b'abc')
+
+    @do(Resource)
+    def program():
+        _, f = yield open_file(path, mode, buffering)
+        return f
+
+    f = run(program)
+    assert type(f) is expected_type
+    assert f.closed
+
+def test_open_file_binary_round_trip(tmp_path):
+    path = tmp_path / 'data.bin'
+
+    @do(Resource)
+    def program():
+        token, out = yield open_file(path, 'wb')
+        out.write(b'\x00\x01\x02')
+        yield release(token)            # flushes and closes before reading back
+        _, back = yield open_file(path, 'rb')
+        return back.read()
+
+    assert run(program) == b'\x00\x01\x02'
+
+def test_open_file_missing_file_registers_nothing(tmp_path):
+    log = []
+
+    @do(Resource)
+    def program():
+        yield logged(log, 'a')
+        yield open_file(tmp_path / 'missing.txt')
+
+    with pytest.raises(FileNotFoundError):
+        run(program)
+    assert log == ['open a', 'close a']
+
+@pytest.mark.parametrize('kwds', [{}, {'named': True}, {'spooled': True}])
+@pytest.mark.parametrize('mode, data', [('w+b', b'bytes'), ('w+', 'text')])
+def test_temp_file_kinds_and_modes(kwds, mode, data):
+    @do(Resource)
+    def program():
+        _, f = yield temp_file(mode, **kwds)
+        f.write(data)
+        f.seek(0)
+        return f.read(), f
+
+    contents, f = run(program)
+    assert contents == data
+    assert f.closed
+    assert isinstance(f, tempfile.SpooledTemporaryFile) == bool(kwds.get('spooled'))
+
+def test_temp_file_forwards_text_options():
+    @do(Resource)
+    def program():
+        _, f = yield temp_file('w+', -1, 'utf-16', newline='\r\n')
+        f.write('a\nb')
+        f.flush()
+        f.buffer.seek(0)
+        return f.buffer.read()
+
+    assert run(program) == 'a\r\nb'.encode('utf-16')
+
+def test_named_temp_file_is_deleted_after_region():
+    names = []
+
+    @do(Resource)
+    def program():
+        _, f = yield temp_file('w+', named=True, prefix='fnc-', suffix='.txt')
+        names.append(f.name)
+        return os.path.exists(f.name)
+
+    assert run(program)
+    name = os.path.basename(names[0])
+    assert name.startswith('fnc-') and name.endswith('.txt')
+    assert not os.path.exists(names[0])
+
+def test_named_temp_file_kept_without_delete(tmp_path):
+    @do(Resource)
+    def program():
+        _, f = yield temp_file('w+', named=True, delete=False, dir=tmp_path)
+        f.write('kept')
+        return f.name
+
+    name = run(program)
+    assert os.path.dirname(name) == str(tmp_path)
+    with open(name) as f:
+        assert f.read() == 'kept'
+
+def test_spooled_temp_file_rolls_over_at_max_size():
+    @do(Resource)
+    def program():
+        _, f = yield temp_file('w+b', spooled=True, max_size=8)
+        f.write(b'1234')
+        before = f._rolled                  # pylint: disable=protected-access
+        f.write(b'56789')
+        return before, f._rolled            # pylint: disable=protected-access
+
+    assert run(program) == (False, True)
+
+
+#
+# Detaching and attaching
+#
+
+def test_detached_resource_survives_the_region():
+    log = []
+
+    @do(Resource)
+    def program():
+        token, handle = yield logged(log, 'a')
+        yield logged(log, 'b')
+        free = yield detach(token)
+        return handle, free
+
+    handle, free = run(program)
+    assert handle == 'a'
+    assert log == ['open a', 'open b', 'close b']
+
+    IO.unsafe_run(free(EarlyRelease()))
+    assert log == ['open a', 'open b', 'close b', 'close a']
+
+def test_detached_free_action_receives_its_reason():
+    log = []
+
+    @do(Resource)
+    def program():
+        token, _ = yield reason_logger(log, 'a')
+        return (yield detach(token))
+
+    free = run(program)
+    assert not log
+    IO.unsafe_run(free(AtCleanup()))
+    assert log == [('a', AtCleanup())]
+
+def test_detach_after_release_returns_none():
+    log = []
+
+    @do(Resource)
+    def program():
+        token, _ = yield logged(log, 'a')
+        yield release(token)
+        return (yield detach(token))
+
+    assert run(program) is None
+    assert log == ['open a', 'close a']
+
+def test_detach_after_region_returns_none():
+    log = []
+    tokens = []
+
+    @do(Resource)
+    def program():
+        token, _ = yield logged(log, 'a')
+        tokens.append(token)
+
+    run(program)
+    assert IO.unsafe_run(detach(tokens[0])) is None
+    assert log == ['open a', 'close a']
+
+def test_detach_twice_returns_none_the_second_time():
+    @do(Resource)
+    def program():
+        token, _ = yield logged([], 'a')
+        first = yield detach(token)
+        second = yield detach(token)
+        return first, second
+
+    first, second = run(program)
+    assert first is not None and second is None
+    IO.unsafe_run(first(EarlyRelease()))
+
+def test_attach_moves_a_resource_between_regions():
+    log = []
+
+    @do(Resource)
+    def first():
+        token, handle = yield logged(log, 'a')
+        free = yield detach(token)
+        return handle, free
+
+    handle, free = run(first)
+
+    @do(Resource)
+    def second():
+        yield logged(log, 'b')
+        yield attach(free)
+        log.append(f'using {handle}')
+
+    run(second)
+    # Attached last, so released first
+    assert log == ['open a', 'open b', 'using a', 'close a', 'close b']
+
+def test_attached_resource_can_be_released_early():
+    log = []
+
+    @do(Resource)
+    def program():
+        token, _ = yield reason_logger(log, 'a')
+        free = yield detach(token)
+        new_token = yield attach(free)
+        yield release(new_token)
+        log.append('released')
+
+    run(program)
+    assert log == [('a', EarlyRelease()), 'released']
+
+def test_attach_passes_exception_reason():
+    log = []
+    boom = RuntimeError('boom')
+
+    @do(Resource)
+    def program():
+        token, _ = yield reason_logger(log, 'a')
+        free = yield detach(token)
+        yield attach(free)
+        raise boom
+
+    with pytest.raises(RuntimeError):
+        run(program)
+    [(handle, why)] = log
+    assert handle == 'a' and why == AfterError(boom)
+
+def test_attach_to_closed_registry_frees_and_raises():
+    log = []
+    tokens = []
+
+    @do(Resource)
+    def program():
+        token, _ = yield logged(log, 'a')
+        tokens.append(token)
+        return (yield detach(token))
+
+    free = run(program)
+    registry = tokens[0].registry       # closed when the region ended
+
+    with pytest.raises(RuntimeError, match='closed registry'):
+        IO.unsafe_run(attach(free)._action(registry))   # pylint: disable=protected-access
+    assert log == ['open a', 'close a']
+
+def test_detach_for_hand_off_on_success():
+    """Acquires several resources; keeps all on success, frees all on failure."""
+    log = []
+
+    def open_pair(fail):
+        @do(Resource)
+        def program():
+            token_a, a = yield logged(log, 'a')
+            token_b, b = yield logged(log, 'b')
+            if fail:
+                raise OSError('setup failed')
+            free_a = yield detach(token_a)
+            free_b = yield detach(token_b)
+            return (a, b), (free_b, free_a)
+        return program
+
+    with pytest.raises(OSError):
+        run(open_pair(fail=True))
+    assert log == ['open a', 'open b', 'close b', 'close a']
+
+    log.clear()
+    pair, frees = run(open_pair(fail=False))
+    assert pair == ('a', 'b')
+    assert log == ['open a', 'open b']
+    for free in frees:
+        IO.unsafe_run(free(EarlyRelease()))
+    assert log == ['open a', 'open b', 'close b', 'close a']

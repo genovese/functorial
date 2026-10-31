@@ -1,14 +1,35 @@
-"""Resource in IO Monad
+"""Resource (in IO) Monad
 
-Resource[A] is analogous to ResourceT IO a in Haskell
+This provides a computational context in which resources
+can be allocated and released and in which they are guaranteed
+to be released on exit from the context, either by ordinary
+execution or after an exception.
+
+This provides functionality similar to context managers
+in Python (and in particular, contextlib.ExitStack)
+but encapsulated in a computational object.
+
+The management of the resources is thread-safe, and
+the actions releasing those resources can determine
+the reason for release (EarlyRelease, AtCleanup, AfterError)
+to make context-sensitive decisions.
+
+Note: Resource[A] is analogous to ResourceT IO a in Haskell
 
 """
+# ruff: noqua: FTPT001, FBT002
 from __future__      import annotations
+
+import io as pio
+import tempfile
+import typing
 
 from collections.abc import Callable
 from contextlib      import AbstractContextManager
 from dataclasses     import dataclass
 from threading       import Lock
+from typing          import Any, BinaryIO, Literal, overload, TYPE_CHECKING
+
 
 from .applicative    import map2
 from .functions      import const
@@ -24,12 +45,17 @@ __all__ = [
     'acquire',
     'AfterError',
     'AtCleanup',
+    'attach',
+    'detach',
     'EarlyRelease',
     'lift_io',
+    'open_file',
     'release',
     'ReleaseReason',
+    'ReleaseToken',
     'Resource',
     'run_in_io',
+    'temp_file',
 ]
 
 
@@ -126,17 +152,89 @@ class ResourceRegistry:
 class Resource[A](Monad):
     """The Resource Monad
 
+    This provides an effectful computational context (a monad) in
+    which a pool of resources is managed. Resources can be allocated,
+    used, and released flexibly, and all resources are guaranteed to
+    be released on exit from the context, whether through ordinary
+    execution or via an exception. Resource management is thread safe.
+    Releasing a resource is guaranteed to only happen once,
+    and the release operation is idempotent.
+
+    A resource object can be run to produce an IO action or
+    run in IO (see `run_in_io`) to produce a value and its
+    side effects in an IO context.
+
+    Key operations:
+
+      + acquire_with, acquire, acquire_cm :: allocate a resource
+          via an IO action, registering a cleanup action
+      + release :: releases a resource early
+      + .run() :: produces an IO action from a Resource object
+      + .unsafe_run() :: runs the returned IO action immediately
+      + detach :: take responsibility for freeing a particular resource
+      + attach :: register an existing resource
+      + run_in_io :: run the resulting IO action in an IO context
+      + lift_io :: wraps an IO action in a Resource object
+
+    In addition, as a monad, Resource[A] inherits all the
+    Functor, Applicative, and Monad methods.
+
+    Example: The following produces an effectful function
+    that combines several files, processing the lines
+    of the middle file, into a new output file. This uses
+    a convenience function in this module, open_file, to
+    represent an open file resource for several files.
+    It reads from the files, releasing them when finished
+    and letting two release on cleanup. Note that the
+    acquire step gives a unique token and a resource;
+    the token is used to release that resource, which
+    is guaranteed to only happen once.
+
+    @effect(Resource)
+    def build_report(
+        header_file: Path | str,
+        body_file: Path | str,
+        footer_file: Path | str,
+        output_file: Path | str,
+        process_line: Callable[[str], str] = identity
+    ):
+        out_token, output = yield open_file(output_file, "w")
+        hdr_token, header = yield open_file(header_file, "r")
+
+        line_count = 0
+        for line in header:
+            output.write(line)
+            line_count += 1
+        yield release(hdr_token)
+
+        bdy_token, body = yield open_file(body_file, "r")
+        for line in body:
+            output.write(process_line(line))
+            line_count += 1
+        yield release(bdy_token)
+
+        _, footer = yield open_file(footer_file, "r")
+        for line in footer:
+            output.write(line)
+            line_count += 1
+
+        return line_count
+
+    We can use this as
+
+    build_report("/docs/hdr", "/docs/body", "/docs/ftr", "/doc/report", lambda s: "| " + s)
+
+    creates the report file in "/docs/report".
+
     This maintains a pool of registered resources that are allocated
     within the monad's region. The resources can be used and will
     automatically clean up on exit of the region or if there is
     exception. The resources can also be released early by the user.
     Resources can be interleaved and freed.
 
-    A resource object can be run to produce an IO action or
-    run in IO (see `run_in_io`) to produce a value and its
-    side effects in an IO context.
 
-    This plays a similar role as contextlib.ExitStack in Python.
+    This plays a similar role as contextlib.ExitStack in Python,
+    and Resource[A] is analogous to  ResourceT IO a in Haskell.
 
     """
     def __init__(self, action: Callable[[ResourceRegistry], IO[A]]):
@@ -235,6 +333,10 @@ class Resource[A](Monad):
         return IO(run_resource)
 
     @classmethod
+    def unsafe_run(cls, resource: Resource[A]) -> A:
+        return IO.unsafe_run(resource.run())
+
+    @classmethod
     def acquire_with[B](cls, allocate: IO[B], free: Callable[[B, ReleaseReason], IO[Unit]]) -> Resource[tuple[ReleaseToken, B]]:
         def _acquire(r: ResourceRegistry) -> IO[tuple[ReleaseToken, B]]:
             def register() -> tuple[ReleaseToken, B]:
@@ -265,6 +367,43 @@ class Resource[A](Monad):
             return ()
 
         return IO(release_resource)
+
+    @classmethod
+    def detach(cls, token: ReleaseToken) -> IO[Callable[[ReleaseReason], IO[Unit]] | None]:
+        """Removes a resource from its context without executing the free action.
+
+        Returns the resource's free action, or None if the resource was already released.
+
+        Executing the free action is **now the caller's responsibility**.
+
+        A use case for this is when deciding dynamically that an acquired
+        resource should be preserved or passed to another Resource.
+        See also `attach`.
+
+        """
+        return IO(lambda: token.registry.deregister(token))
+
+    @classmethod
+    def attach(cls, free: Callable[[ReleaseReason], IO[Unit]]) -> Resource[ReleaseToken]:
+        """Registers the free action for an existing resource, returning a unique release token.
+
+        This can be used when transferring responsibility for an existing
+        resource to the current Resource context.
+
+        Attempting to attach a resource to a closed registry
+        will run the free action and raise an error.
+
+        """
+        def _attach(r: ResourceRegistry) -> IO[ReleaseToken]:
+            def register() -> ReleaseToken:
+                token = r.register(free)
+                if token is None:
+                    e = RuntimeError('Attempt to attach a resource to a closed registry')
+                    IO.unsafe_run(free(AfterError(e)))
+                    raise e
+                return token
+            return IO(register)
+        return Resource(_attach)
 
 def acquire_with[A](allocate: IO[A], free: Callable[[A, ReleaseReason], IO[Unit]]) -> Resource[tuple[ReleaseToken, A]]:
     """Allocates a resource and registers its freeing action.
@@ -333,15 +472,263 @@ def release(token: ReleaseToken) -> IO[Unit]:
     """Releases a resource as an IO action."""
     return Resource.release(token)
 
+def detach(token: ReleaseToken) -> IO[Callable[[ReleaseReason], IO[Unit]] | None]:
+    """Removes a resource from its context without executing the free action.
+
+    Returns the resource's free action, or None if the resource was already released.
+    Executing the free action is **now the caller's responsibility**.
+
+    """
+    return Resource.detach(token)
+
+def attach(free: Callable[[ReleaseReason], IO[Unit]]) -> Resource[ReleaseToken]:
+    """Registers the free action for an existing resource, returning a unique release token.
+
+    This can be used when transferring responsibility for an existing
+    resource to the current Resource context.
+
+    Attempting to attach a resource to a closed registry
+    will run the free action and raise an error.
+
+    """
+    return Resource.attach(free)
+
 def lift_io[A](ia: IO[A]) -> Resource[A]:
     """Lifts an IO action into the Resource monad."""
     return Resource(const(ia))
 
 def run_in_io[A](resource: Resource[A]) -> IO[A]:
-    """Runs a resource fully in an IO context.
+    """Runs a resource and then its IO action immediately.
 
-    Specifically, the resource is run and then
-    the returned IO action is run as well.
+    Returns the pure value of the action in an IO context.
+    Rerunning the resulting IO value will *not* re-run the effect;
+    it will just produce the value.
+
+    In contrast, resource.run(), produces the effectful IO action
+    from this resource. Resource.unsafe_run() runs the resource
+    and its IO action and returns the unwrapped value.
+
+    This is analogous to the pseudo-Haskell
+
+        main :: IO a
+        main = do a <- resource.run; pure a
+
+    where the resource's action is run immediately.
 
     """
     return IO.run(resource.run())
+
+
+#
+# Resource Utilities
+#
+
+if TYPE_CHECKING:
+    from _typeshed import (FileDescriptorOrPath, OpenBinaryMode, OpenBinaryModeReading,
+                           OpenBinaryModeUpdating, OpenBinaryModeWriting, OpenTextMode,
+                           StrPath)
+
+# Opening Files
+
+@overload          # Text Mode
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenTextMode = 'r',
+    buffering: int = -1,
+    encoding: str | None = None,
+    *,
+    errors: str | None = None,
+    newline: str | None = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, pio.TextIOWrapper]]:
+    ...
+
+@overload          # Unbuffered binary
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenBinaryMode,
+    buffering: Literal[0],
+    encoding: Literal[None] = None,
+    *,
+    errors: Literal[None] = None,
+    newline: Literal[None] = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, pio.FileIO]]:
+    ...
+
+@overload          # Buffered binary, mixed read/write
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenBinaryModeUpdating,
+    buffering: Literal[-1, 1] = -1,
+    encoding: Literal[None] = None,
+    *,
+    errors: Literal[None] = None,
+    newline: Literal[None] = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, pio.BufferedRandom]]:
+    ...
+
+@overload          # Buffered binary, writing or appending
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenBinaryModeWriting,
+    buffering: Literal[-1, 1] = -1,
+    encoding: Literal[None] = None,
+    *,
+    errors: Literal[None] = None,
+    newline: Literal[None] = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, pio.BufferedWriter]]:
+    ...
+
+@overload          # Buffered binary, reading
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenBinaryModeReading,
+    buffering: Literal[-1, 1] = -1,
+    encoding: Literal[None] = None,
+    *,
+    errors: Literal[None] = None,
+    newline: Literal[None] = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, pio.BufferedReader]]:
+    ...
+
+@overload          # General buffered binary
+def open_file(
+    file: FileDescriptorOrPath,
+    mode: OpenBinaryMode,
+    buffering: int = -1,
+    encoding: Literal[None] = None,
+    *,
+    errors: Literal[None] = None,
+    newline: Literal[None] = None,
+    closefd: bool = True,
+    opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, BinaryIO]]:
+    ...
+
+@overload          # Mode not known statically
+def open_file(
+        file: FileDescriptorOrPath,
+        mode: str,
+        buffering: int = -1,
+        encoding: str | None = None,
+        *,
+        errors: str | None = None,
+        newline: str | None = None,
+        closefd: bool = True,
+        opener: Callable | None = None
+) -> Resource[tuple[ReleaseToken, typing.IO[Any]]]:
+    ...
+
+def open_file(
+    file,
+    mode='r',
+    buffering=-1,
+    encoding=None,
+    *,
+    errors=None,
+    newline=None,
+    closefd=True,
+    opener=None
+) -> Resource[tuple[ReleaseToken, Any]]:
+    return acquire_cm(lambda: open(file, mode=mode, buffering=buffering, encoding=encoding,
+                                   errors=errors, newline=newline, closefd=closefd, opener=opener))
+
+
+# Temporary Files
+
+@overload
+def temp_file(
+        mode: OpenTextMode,
+        buffering: int = -1,
+        encoding: str | None = None,
+        *,
+        named: bool = False,
+        spooled: bool = False,
+        newline: str | None = None,
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: StrPath | None = None,
+        delete: bool = True,
+        max_size: int = 0,
+        delete_on_close: bool = True,
+        errors: str | None = None
+) -> Resource[tuple[ReleaseToken, typing.IO[str]]]:
+    ...
+@overload
+def temp_file(
+        mode: OpenBinaryMode = 'w+b',
+        buffering: int = -1,
+        encoding: None = None,
+        *,
+        named: bool = False,
+        spooled: bool = False,
+        newline: None = None,
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: StrPath | None = None,
+        delete: bool = True,
+        max_size: int = 0,
+        delete_on_close: bool = True,
+        errors: None = None
+) -> Resource[tuple[ReleaseToken, typing.IO[bytes]]]:
+    ...
+
+@overload
+def temp_file(
+        mode: str = 'w+b',
+        buffering: int = -1,
+        encoding: None = None,
+        *,
+        named: bool = False,
+        spooled: bool = False,
+        newline: None = None,
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: StrPath | None = None,
+        delete: bool = True,
+        max_size: int = 0,
+        delete_on_close: bool = True,
+        errors: None = None
+) -> Resource[tuple[ReleaseToken, typing.IO[Any]]]:
+    ...
+
+def temp_file(
+        mode='w+b',
+        buffering=-1,
+        encoding=None,
+        *,
+        named=False,
+        spooled=False,
+        newline=None,
+        suffix=None,
+        prefix=None,
+        dir=None,             # noqa: A002
+        delete=True,
+        max_size=0,
+        delete_on_close=True,
+        errors=None
+) -> Resource[tuple[ReleaseToken, Any]]:
+    if named:
+        def alloc():
+            return tempfile.NamedTemporaryFile(mode=mode, buffering=buffering, encoding=encoding, newline=newline,
+                                               suffix=suffix, prefix=prefix, dir=dir, delete=delete, errors=errors,
+                                               delete_on_close=delete_on_close)
+    elif spooled:
+        def alloc():
+            return tempfile.SpooledTemporaryFile(max_size=max_size, mode=mode, buffering=buffering, encoding=encoding,
+                                                 newline=newline, suffix=suffix, prefix=prefix, dir=dir, errors=errors)
+    else:
+        def alloc():
+            return tempfile.TemporaryFile(mode=mode, buffering=buffering, encoding=encoding,
+                                          newline=newline, suffix=suffix, prefix=prefix, dir=dir, errors=errors)
+
+    return acquire_cm(alloc)
