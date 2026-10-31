@@ -7,9 +7,17 @@
 
 from __future__ import annotations
 
+
+#
+# Submodules
+#
 from . import monoids
 from . import optics
 
+
+#
+# Higher Order Types
+#
 from .alternative import *
 from .applicative import *
 from .bicofunctor import *
@@ -21,34 +29,46 @@ from .monad       import *
 from .profunctor  import *
 from .traversable import *
 
+
+#
+# Concrete Functors, Applicatives, Monads
+#
 from .const       import *
+from .dict        import *
 from .either      import *
 from .identity    import *
+from .io          import *
 from .list        import *
 from .maybe       import *
+from .monoids     import Monoid, munit, mcombine
 from .ntuple      import *
 from .pair        import *
-
-from .dict        import *
-from .monoids     import Monoid, munit, mcombine
 from .reader      import *
+from .resource    import *
 from .set         import *
 from .state       import *
 from .trees       import *
 from .writer      import *
 
+
+#
+# Utility and Infrastructure
+#
 from .functions   import *
-from .io          import *
 from .ops         import *
 from .utils       import *
 from .wrappers    import *
 
 from .pair        import pair  # More powerful version over .functions.pair
 
+
+#
+# Special Sublibraries
+#
 from .optics.all  import *
+
 
 #
 # Conveniences
 #
-
 c = compose
