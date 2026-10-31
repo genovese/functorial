@@ -55,12 +55,17 @@ Examples
     class MySum(SumType, data=['A', 'B', 'C']):
         ...
 
+  or equivalently
+
+    class MyEnum(SumType, data={'Foo': None, 'Bar': None, 'Zap': None}):
+        ...
+
   As described above, MySum is an abstract base class
   with allowed subclasses A, B, and C.
 
   2. Simple Sums
 
-    class MyEnum(SumType, data={'Foo': None, 'Bar': None, 'Zap': None}):
+    class MyEnum(SumType, data={'Foo': [], 'Bar': [], 'Zap': []}):
         ...
 
   defines MyEnum as an abstract base class with allowed subclasses
@@ -105,19 +110,12 @@ Examples
     class C(MySum, singleton=True):
         pass
 
-Note on Type Checking
-
+  Note on Auto-generation and Type Checking
+  -----------------------------------------
   Note that the auto-generated classes will not be detectable by mypy,
-  so in the first instance, one might want to do, e.g.,
-
-     if TYPE_CHECKING:
-         class Foo(MyEnum): pass
-         class Bar(MyEnum): pass
-         class Zap(MyEnum): pass
-
-  with stub classes. Alternatively, one can enter the information
-  in the .pyi files. This somewhat defeats the purpose of auto
-  generating, but alas.
+  so as convenient as it is, the auto-generation feature is most useful
+  at the REPL or in informal scripts where we don't worry about type
+  checking.
 
 """
 
@@ -184,7 +182,12 @@ def _is_stale_variant(obj, root_type) -> bool:
 # which upsets mypy, which is why the type: ignore is used below.
 
 class SumTypeMeta(type(Protocol)):  # type: ignore[misc]
-    """ATTN
+    """Metaclass for generating true sum types.
+
+    Types created with this metaclass accept data and singleton arguments
+    to specify features of the concrete subclasses. See SumType
+    for details.
+
     """
     def __new__(mcls, name, bases, class_dict, *, data=None, singleton=False, **kwargs):
         allowed_subclasses = None   # subclass whitelist
@@ -321,4 +324,77 @@ class _VariantMeta(SumTypeMeta):
     __call__ = type.__call__
 
 class SumType(metaclass=SumTypeMeta):
+    """A base class for sum types.
+
+    The basic structure of a sum type is that the *type* is represented by an
+    abstract base class, which directly inherits from SumType, and
+    the allowed subtypes are specified when that base class is defined.
+    The concrete classes can then be defined as needed, though subclasses
+    with no data are typically set as singleton's (singleton=True).
+    Subclasses can be auto-generated, though this is most useful for
+    simple scripts or at the REPL.
+
+    Enumeration-style Sum Types
+    ---------------------------
+    For example, a TL1 type of the form
+
+       data X = A | B | C
+
+    is created with
+
+       class X(SumType, data=['A', 'B', 'C'])
+           ...
+
+    This sets the allowed subtypes to be A, B, and C
+    without further subclasses. We can then define
+
+       class A(X, singleton=True):
+           pass
+
+       class B(X, singleton=True):
+           pass
+
+       class C(X, singleton=True):
+           pass
+
+    putting any desired methods (but no data).
+
+    These can be auto-generated with
+
+       class X(SumType, data={'A': [], 'B': [], 'C': []})
+           ...
+
+    though mypy etc will not know about these classes.
+
+    More general variants
+    ---------------------
+    The subclasses can have any structure or data desired.
+
+       class X(SumType, data=['A', 'B', 'C'])
+           ...
+
+       @dataclass
+       class A(SumType):
+           n: int
+           s: str
+
+       class B(SumType):
+           ...
+
+       class C(SumType):
+           ...
+
+    and so forth. Again, these can be auto-generated as
+    dataclasses with a more complicated spec
+
+       class X(SumType, data={'A': [('n', int), ('s', str)], 'B': [...], 'C': [...]})
+           ...
+
+    which will define the fields, match args, and even defaults (using field).
+    But again auto-generation is most useful where type checking is not an issue
+    as mypy cannot see them.
+
+    See also the module docstring for more examples and details.
+
+    """
     __slots__ = ()
