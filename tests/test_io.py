@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import io as pio
 
+import pytest
+
 from functorial.functor     import map         # pylint: disable=redefined-builtin
 from functorial.io          import IO, as_io
 from functorial.list        import List
+from functorial.monad       import do
 from functorial.trees       import RoseTree
 from functorial.traversable import sequence, traverse
 
@@ -63,3 +66,55 @@ def test_join_defers_outer_effects():
     assert log == []
     assert IO.unsafe_run(flat) == 5
     assert log == ["outer", "inner"]
+
+def test_do_body_can_handle_action_exceptions():
+    log = []
+
+    def boom():
+        raise RuntimeError('boom')
+
+    @do(IO)
+    def program():
+        try:
+            yield IO(boom)
+        except RuntimeError:
+            log.append('handled')
+        finally:
+            log.append('finally')
+        return 'ok'
+
+    assert IO.unsafe_run(program) == 'ok'
+    assert log == ['handled', 'finally']
+
+def test_do_finally_runs_promptly_on_unhandled_exception():
+    log = []
+
+    def boom():
+        raise RuntimeError('boom')
+
+    @do(IO)
+    def program():
+        try:
+            yield IO(boom)
+        finally:
+            log.append('finally')
+
+    caught = None
+    try:
+        IO.unsafe_run(program)
+    except RuntimeError as e:
+        caught = e    # holding the exception must not delay the finally
+        assert log == ['finally']
+    assert caught is not None
+
+def test_stop_iteration_from_action_is_not_a_return():
+    def stop():
+        raise StopIteration
+
+    @do(IO)
+    def program():
+        yield IO(stop)
+        return 'unreachable'
+
+    with pytest.raises(RuntimeError):
+        IO.unsafe_run(program)

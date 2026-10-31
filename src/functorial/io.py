@@ -8,8 +8,9 @@ We represent these as functions.
 """
 # pylint: disable=arguments-renamed
 
-from __future__ import annotations
-from typing     import Any, Callable, cast
+from __future__      import annotations
+from collections.abc import Callable
+from typing          import Any, cast
 
 from .monad import Monad
 
@@ -142,21 +143,25 @@ class IO[A](Monad):
     @classmethod
     def __do__(cls, make_generator, is_generator) -> IO[A]:
         """Implements do-notation for IO"""
-
         if not is_generator:
             def _get_value():
                 return cls.unsafe_ensure_run_io(make_generator())
             return IO(_get_value)
 
-        def f():
+        def code():
             generator = make_generator()
             try:
                 x = generator.send(None)
                 while True:
-                    x = generator.send(IO.unsafe_run(x))
+                    try:
+                        value = IO.unsafe_run(x)
+                    except BaseException as e:
+                        x = generator.throw(e)
+                    else:
+                        x = generator.send(value)
             except StopIteration as finished:
                 if isinstance(finished.value, IO):
                     return IO.unsafe_run(finished.value)
                 return finished.value
 
-        return IO(f)
+        return IO(code)
