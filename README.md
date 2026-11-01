@@ -108,8 +108,8 @@ match a_partial_func(10):
         ...
     case Nothing():
         ...
-    case _:
-        raise InValidSumTypeException('Maybe')
+    case invalid:
+        raise SumTypeInvalidCaseException(invalid, Maybe)
 
 Some(3).map(lambda x: x + 1)     # Some(4)
 Nothing().map(lambda x: x + 1)   # Nothing()

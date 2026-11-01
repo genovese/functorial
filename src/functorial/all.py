@@ -56,6 +56,7 @@ from .writer      import *
 #
 from .functions   import *
 from .ops         import *
+from .sum_type    import SumType, SumTypeInvalidCaseException
 from .utils       import *
 from .wrappers    import *
 

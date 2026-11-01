@@ -130,11 +130,12 @@ import sys
 from functorial.singleton import FinalAttribute
 
 __all__ = [
-    'FinalAttribute',  # Re-exported from functorial.singleton
-    'SumType',
-    'SumTypeMeta',
     'abstractmethod',  # Re-exported from abc
     'field',           # Re-exported from dataclasses
+    'FinalAttribute',  # Re-exported from functorial.singleton
+    'SumType',
+    'SumTypeInvalidCaseException',
+    'SumTypeMeta',
 ]
 
 type SubClassSpec = dict[str, list[tuple[str, Any] | tuple[str, Any, Any]] | None]
@@ -398,3 +399,12 @@ class SumType(metaclass=SumTypeMeta):
 
     """
     __slots__ = ()
+
+
+class SumTypeInvalidCaseException(Exception):
+    def __init__(self, seen, root_type: type[SumType]):
+        name = root_type.__name__
+        allowed = root_type._allowed_subclasses
+        mesg = f'Given value {seen} for sum type {name} is not an allowed instance {allowed}.'
+        self._root = root_type
+        super().__init__(mesg)
